@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<!--
+  index.html —— 应用入口 HTML 文件
+
+  <div id="app"> 是 Vue 的挂载点，src/main.ts 中的 createApp().mount('#app') 会挂载到这里。
+  <script type="module"> 使用 ES Module 方式加载入口 TS 文件，Vite 会自动处理 TS 编译和 HMR。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Chat</title>
+</head>
+<body>
+  <!-- Vue 应用挂载点 -->
+  <div id="app"></div>
+  <!-- Vite 入口模块，ES Module 方式加载 -->
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
