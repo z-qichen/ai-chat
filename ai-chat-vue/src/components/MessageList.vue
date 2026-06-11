@@ -214,26 +214,26 @@ onMounted(() => {
 .message-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 24px;
+  padding: 0 1.5rem;
   scroll-behavior: smooth;
 
   /* 内层：限制最大宽度，居中显示 */
   &__inner {
     max-width: 768px;
     margin: 0 auto;
-    padding: 8px 0 24px;
+    padding: 0.5rem 0 1.5rem;
   }
 
   /* 三点加载动画 */
   &__loading {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 8px 16px;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
 
     .loading-dot {
-      width: 6px;
-      height: 6px;
+      width: 0.375rem;
+      height: 0.375rem;
       border-radius: 50%;
       background: var(--loading-dot);
       animation: dotPulse 1.4s ease-in-out infinite;
@@ -249,9 +249,9 @@ onMounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 12px 0;
+    padding: 0.75rem 0;
     color: var(--loading-dot);
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 }
 
@@ -260,8 +260,8 @@ onMounted(() => {
 }
 
 .load-more-spinner {
-  width: 16px;
-  height: 16px;
+  width: 1rem;
+  height: 1rem;
   border: 2px solid var(--spinner-border);
   border-top-color: var(--accent-primary);
   border-radius: 50%;
@@ -281,6 +281,17 @@ onMounted(() => {
   40% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+/* ---- 移动端 ---- */
+@media (max-width: 768px) {
+  .message-list {
+    padding: 0 0.75rem;
+
+    &__inner {
+      padding: 0.375rem 0 1rem;
+    }
   }
 }
 </style>

@@ -9,16 +9,33 @@
   通信方式：父组件通过 props 向下传递数据，子组件通过 emit 向上通知事件
 -->
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import ChatArea from '@/components/ChatArea.vue'
 import { useConversationStore } from '@/stores/conversation'
 
+/** 768px 移动端断点 */
+const MOBILE_BREAKPOINT = 768
+
 /** 会话 Store 实例 */
 const store = useConversationStore()
 
-/** 侧边栏是否可见，true=展开（默认），false=折叠 */
+/** 侧边栏是否可见，桌面端默认展开，移动端默认隐藏 */
 const isSidebarVisible = ref(true)
+
+/** 初始设置：移动端默认折叠 */
+function initSidebarState() {
+  isSidebarVisible.value = window.innerWidth >= MOBILE_BREAKPOINT
+}
+
+onMounted(() => {
+  initSidebarState()
+  window.addEventListener('resize', initSidebarState)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', initSidebarState)
+})
 
 /** 传给 Sidebar 的会话列表（仅含 id + title，不含消息） */
 const sidebarSessions = computed(() =>
@@ -53,7 +70,7 @@ const onDeleteSession = (id: string) => {
 
 <template>
   <div class="chat-page">
-    <!-- 侧边栏区域：通过 --hidden 修饰符控制宽度动画 -->
+    <!-- 侧边栏区域：通过 --hidden 修饰符控制宽度动画（桌面端）/ 滑入动画（移动端） -->
     <div :class="['chat-page__sidebar', { 'chat-page__sidebar--hidden': !isSidebarVisible }]">
       <Sidebar
         :sessions="sidebarSessions"
@@ -65,6 +82,9 @@ const onDeleteSession = (id: string) => {
         @delete-session="onDeleteSession"
       />
     </div>
+
+    <!-- 移动端抽屉遮罩层 -->
+    <div class="chat-page__backdrop" @click="onToggleSidebar"></div>
 
     <!-- 主聊天区域 -->
     <div class="chat-page__main">
@@ -87,7 +107,7 @@ const onDeleteSession = (id: string) => {
     flex-shrink: 0;
     height: 100%;
     overflow: hidden;
-    transition: width 0.3s ease; // 折叠动画
+    transition: width 0.3s ease;
 
     /* 折叠状态：宽度为0 */
     &--hidden {
@@ -98,6 +118,54 @@ const onDeleteSession = (id: string) => {
   /* 主区域：flex: 1 自动占满剩余空间 */
   &__main {
     flex: 1;
+    min-width: 0;
+  }
+
+  /* 移动端抽屉遮罩层：桌面端隐藏 */
+  &__backdrop {
+    display: none;
+  }
+}
+
+/* ---- 移动端 (≤768px) 布局 ---- */
+@media (max-width: 768px) {
+  .chat-page {
+    border-radius: 0;
+  }
+
+  .chat-page__sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 300px;
+    z-index: 50;
+    flex: none;
+    transition: transform 0.3s ease;
+    transform: translateX(-100%);
+    box-shadow: none;
+  }
+
+  /* 展开状态：无 --hidden 类时滑入 */
+  .chat-page__sidebar:not(.chat-page__sidebar--hidden) {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  }
+
+  .chat-page__backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .chat-page__sidebar:not(.chat-page__sidebar--hidden) ~ .chat-page__backdrop {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 </style>

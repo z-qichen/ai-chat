@@ -149,7 +149,12 @@ html.dark {
 
 /* ---- 根元素 ----
  * 设定全局字体栈，优先使用系统原生字体以确保各平台一致性
+ * rem 基准：桌面端 1rem = 16px，移动端 (<768px) 1rem = 14px
  */
+html {
+  font-size: 16px;
+}
+
 html,
 body {
   height: 100%;
@@ -160,6 +165,13 @@ body {
   background-color: var(--bg-page);
   color: var(--text-primary);
   transition: background-color 0.3s, color 0.3s;
+}
+
+/* 移动端：缩小 rem 基准，所有 rem 值自动等比缩小到 87.5% */
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
 }
 
 #app {

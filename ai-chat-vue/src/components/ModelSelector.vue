@@ -147,13 +147,13 @@ function onBlur() {
 .model-selector__trigger {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
   border: 1px solid var(--border-primary);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: var(--bg-input);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
   transition: all 0.2s;
 
@@ -188,29 +188,29 @@ function onBlur() {
 
 .model-selector__dropdown {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 0.375rem);
   left: 50%;
   transform: translateX(-50%);
-  min-width: 240px;
+  min-width: 15rem;
   background: var(--bg-menu);
   border: 1px solid var(--border-primary);
-  border-radius: 10px;
+  border-radius: 0.625rem;
   box-shadow: var(--shadow-lg);
-  padding: 6px;
+  padding: 0.375rem;
   z-index: 100;
 }
 
 .model-selector__option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   width: 100%;
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   border: none;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
   transition: background 0.15s;
   text-align: left;
@@ -227,7 +227,7 @@ function onBlur() {
 
 .model-selector__option-id {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-placeholder);
 }
 

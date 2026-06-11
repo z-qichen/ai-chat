@@ -10,6 +10,7 @@ import messageRoutes from './messages.ts'
 import chatRoutes from './chat.ts'
 import modelRoutes from './models.ts'
 import fileRoutes from './files.ts'
+import memoryRoutes from './memory.ts'
 
 export default async function routes(app: FastifyInstance) {
   await app.register(authRoutes)
@@ -18,4 +19,5 @@ export default async function routes(app: FastifyInstance) {
   await app.register(chatRoutes)
   await app.register(modelRoutes)
   await app.register(fileRoutes)
+  await app.register(memoryRoutes)
 }

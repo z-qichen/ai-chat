@@ -128,7 +128,7 @@ onUnmounted(() => {
 
   /* 段落 */
   :deep(p) {
-    margin: 0 0 8px;
+    margin: 0 0 0.5rem;
     &:last-child { margin-bottom: 0; }
   }
 
@@ -136,11 +136,11 @@ onUnmounted(() => {
   :deep(pre.hljs) {
     background: var(--code-block-bg);
     border: 1px solid var(--code-block-border);
-    border-radius: 8px;
-    padding: 16px;
+    border-radius: 0.5rem;
+    padding: 1rem;
     overflow-x: auto;
-    margin: 12px 0;
-    font-size: 13px;
+    margin: 0.75rem 0;
+    font-size: 0.8125rem;
     line-height: 1.6;
 
     code {
@@ -153,39 +153,39 @@ onUnmounted(() => {
   /* 行内代码 */
   :deep(code) {
     background: var(--code-bg);
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
     font-size: 0.9em;
     font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   }
 
   /* 有序/无序列表 */
   :deep(ul), :deep(ol) {
-    padding-left: 20px;
-    margin: 8px 0;
+    padding-left: 1.25rem;
+    margin: 0.5rem 0;
   }
 
   :deep(li) {
-    margin: 4px 0;
+    margin: 0.25rem 0;
   }
 
   /* 引用块 */
   :deep(blockquote) {
     border-left: 3px solid var(--blockquote-border);
-    padding-left: 12px;
-    margin: 12px 0;
+    padding-left: 0.75rem;
+    margin: 0.75rem 0;
     color: var(--text-muted);
   }
 
   /* 表格 */
   :deep(table) {
     border-collapse: collapse;
-    margin: 12px 0;
+    margin: 0.75rem 0;
     width: 100%;
 
     th, td {
       border: 1px solid var(--border-primary);
-      padding: 8px 12px;
+      padding: 0.5rem 0.75rem;
       text-align: left;
     }
 
@@ -204,7 +204,7 @@ onUnmounted(() => {
 
   /* 标题 */
   :deep(h1), :deep(h2), :deep(h3), :deep(h4) {
-    margin: 16px 0 8px;
+    margin: 1rem 0 0.5rem;
     font-weight: 600;
   }
 }

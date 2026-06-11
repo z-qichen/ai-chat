@@ -8,24 +8,37 @@
  */
 import { listAllMessages } from './message.ts'
 import { processFile } from './file.ts'
+import { injectMemoriesIntoSystemPrompt } from './memory.ts'
 import type { Message, ContentPart } from '../types/index.ts'
 
 export interface BuildMessagesOptions {
   conversationId: string
   systemPrompt?: string
+  userId?: string
 }
 
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string | ContentPart[]
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string | ContentPart[] | null
+  tool_call_id?: string
+  tool_calls?: Array<{
+    id: string
+    type: 'function'
+    function: { name: string; arguments: string }
+  }>
 }
 
 export async function buildMessages(options: BuildMessagesOptions): Promise<ChatMessage[]> {
-  const { conversationId, systemPrompt = '你是一个有用的AI助手。' } = options
+  const { conversationId, systemPrompt = '你是一个有用的AI助手。', userId } = options
+
+  const finalSystemPrompt = userId
+    ? injectMemoriesIntoSystemPrompt(userId, systemPrompt)
+    : systemPrompt
+
   const allMessages = listAllMessages(conversationId)
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: finalSystemPrompt },
   ]
 
   for (const msg of allMessages) {

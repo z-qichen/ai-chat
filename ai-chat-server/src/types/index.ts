@@ -92,8 +92,33 @@ export interface StreamRequestWithFiles {
 export interface StreamChunk {
   content: string
   done: boolean
-  /** chunk 类型：thinking=思考过程，answer=最终回答 */
-  type?: 'thinking' | 'answer'
+  /** chunk 类型：thinking=思考过程，answer=最终回答，memories_added=记忆提取完成 */
+  type?: 'thinking' | 'answer' | 'memories_added'
+  /** AI 调用的工具列表（extract_user_info 等） */
+  toolCalls?: Array<{ id: string; function: { name: string; arguments: string } }>
+  /** 记忆提取完成时携带新增的记忆数量 */
+  memoriesAdded?: number
+}
+
+/** 用户记忆条目 */
+export interface MemoryItem {
+  id: string
+  userId: string
+  category: 'identity' | 'address' | 'preference' | 'background' | 'other'
+  key: string
+  value: string
+  confidence: number
+  source: 'auto' | 'manual'
+  createdAt: number
+  updatedAt: number
+}
+
+/** 记忆提取工具调用的参数 */
+export interface ExtractMemoryArgs {
+  category: MemoryItem['category']
+  key: string
+  value: string
+  confidence: number
 }
 
 /** 上传的文件元数据 */

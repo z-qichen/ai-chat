@@ -1,10 +1,13 @@
 /**
  * src/routes/chat.ts —— SSE 流式对话路由
  *
- * POST /api/conversations/:id/chat/stream — SSE 流式回复
+ * POST /api/conversations/:id/chat/stream — SSE 流式回复（含记忆自动提取）
+ * POST /api/conversations/:id/chat/stop   — 停止生成
+ * POST /api/conversations/:id/chat/continue — 继续被截断的消息
  *
  * 用户消息已由 addMessage API 提前保存，
- * 本路由负责调用 DeepSeek API 流式接口并将生成结果以 SSE 格式推送给前端。
+ * 本路由负责调用 DeepSeek API 并将生成结果以 SSE 格式推送给前端。
+ * 同时通过 Tool Calling 自动提取用户个人信息并持久化到 user_memories 表。
  */
 import { Readable } from 'node:stream'
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
@@ -13,7 +16,11 @@ import { chatStream } from '../services/deepseek.ts'
 import { createMessage, updateMessage, listAllMessages } from '../services/message.ts'
 import { getConversationByUser, createConversation, updateConversation } from '../services/conversation.ts'
 import { buildMessages } from '../services/chat.ts'
-import type { StreamRequestWithFiles } from '../types/index.ts'
+import { getMemoryTool, handleExtractToolCalls, injectMemoriesIntoSystemPrompt } from '../services/memory.ts'
+import type { StreamRequestWithFiles, StreamChunk } from '../types/index.ts'
+
+/** 记忆提取最大轮次，防止无限循环 */
+const MAX_MEMORY_ROUNDS = 2
 
 const activeStreams = new Map<string, AbortController>()
 
@@ -47,7 +54,6 @@ export default async function chatRoutes(app: FastifyInstance) {
       const userId = (request as any).user.userId
       const { model: reqModel, fileIds, thinking } = request.body as StreamRequestWithFiles
 
-      // 思考模式下默认使用 deepseek-v4-pro
       const isThinking = thinking?.type === 'enabled'
       const defaultModel = isThinking ? 'deepseek-v4-pro' : 'deepseek-chat'
       const model = reqModel ?? defaultModel
@@ -56,8 +62,6 @@ export default async function chatRoutes(app: FastifyInstance) {
       if (!conversation) {
         conversation = createConversation(userId, '新对话', model, id)
       }
-
-      const messages = await buildMessages({ conversationId: id })
 
       const stream = new Readable({ read() {} })
 
@@ -78,17 +82,37 @@ export default async function chatRoutes(app: FastifyInstance) {
       let fullReasoningContent = ''
 
       try {
-        const deepseekStream = chatStream({ messages, model, signal: controller.signal, thinking })
+        const memoryTool = getMemoryTool()
 
-        for await (const chunk of deepseekStream) {
+        const result = await streamWithMemoryExtraction({
+          conversationId: id,
+          userId,
+          model,
+          signal: controller.signal,
+          thinking,
+          memoryTool,
+          maxRounds: MAX_MEMORY_ROUNDS,
+        })
+
+        for (const chunk of result.chunks) {
           if (chunk.content) {
             if (chunk.type === 'thinking') {
               fullReasoningContent += chunk.content
-            } else {
+            } else if (chunk.type === 'answer') {
               fullContent += chunk.content
             }
           }
           stream.push(`data: ${JSON.stringify(chunk)}\n\n`)
+        }
+
+        if (result.memoriesAdded > 0) {
+          const notification: StreamChunk = {
+            content: '',
+            done: false,
+            type: 'memories_added',
+            memoriesAdded: result.memoriesAdded,
+          }
+          stream.push(`data: ${JSON.stringify(notification)}\n\n`)
         }
 
         createMessage({
@@ -135,7 +159,7 @@ export default async function chatRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: '对话不存在' })
       }
 
-      const messages = await buildMessages({ conversationId: id })
+      const messages = await buildMessages({ conversationId: id, userId })
 
       const stream = new Readable({ read() {} })
 
@@ -209,4 +233,87 @@ export default async function chatRoutes(app: FastifyInstance) {
       }
     }
   )
+}
+
+/**
+ * 带记忆提取的流式对话
+ *
+ * 最多进行 maxRounds 轮 tool calling：
+ * - 每轮先流式调用 LLM（带 extract_user_info 工具）
+ * - 如果 LLM 返回 tool_calls，则写入记忆、更新消息列表、进入下一轮
+ * - 最后一轮或无需工具调用时，返回最终 chunks
+ */
+async function streamWithMemoryExtraction(params: {
+  conversationId: string
+  userId: string
+  model: string
+  signal: AbortSignal
+  thinking?: { type: 'enabled' | 'disabled' }
+  memoryTool: ReturnType<typeof getMemoryTool>
+  maxRounds: number
+}): Promise<{ chunks: StreamChunk[]; memoriesAdded: number }> {
+  const { conversationId, userId, model, signal, thinking, memoryTool, maxRounds } = params
+  const baseSystemPrompt = '你是一个有用的AI助手。'
+  let messages = await buildMessages({ conversationId, userId, systemPrompt: baseSystemPrompt })
+  let totalMemoriesAdded = 0
+
+  for (let round = 0; round < maxRounds; round++) {
+    const isLastRound = round === maxRounds - 1
+    const tools = isLastRound ? [] : [memoryTool]
+
+    const deepseekStream = chatStream({ messages, model, signal, thinking, tools })
+    const chunks: StreamChunk[] = []
+    let toolCalls: StreamChunk['toolCalls'] | undefined
+
+    for await (const chunk of deepseekStream) {
+      if (chunk.toolCalls?.length) {
+        toolCalls = chunk.toolCalls
+      } else {
+        chunks.push(chunk)
+      }
+    }
+
+    if (!toolCalls) {
+      return { chunks, memoriesAdded: totalMemoriesAdded }
+    }
+
+    // 处理 tool_calls，写入记忆
+    const count = handleExtractToolCalls(toolCalls, userId)
+    totalMemoriesAdded += count
+
+    if (count === 0) {
+      return { chunks, memoriesAdded: totalMemoriesAdded }
+    }
+
+    // 将 tool_calls 和结果追加到消息列表
+    messages.push({
+      role: 'assistant',
+      content: null,
+      tool_calls: toolCalls.map(tc => ({
+        id: tc.id,
+        type: 'function' as const,
+        function: tc.function,
+      })),
+    })
+
+    for (const tc of toolCalls) {
+      messages.push({
+        role: 'tool',
+        content: '已记录',
+        tool_call_id: tc.id,
+      })
+    }
+
+    // 刷新 system prompt 中的记忆
+    messages[0].content = injectMemoriesIntoSystemPrompt(userId, baseSystemPrompt)
+  }
+
+  // 最后一轮：不带 tools 的纯流式回复
+  const finalStream = chatStream({ messages, model, signal, thinking, tools: [] })
+  const chunks: StreamChunk[] = []
+  for await (const chunk of finalStream) {
+    chunks.push(chunk)
+  }
+
+  return { chunks, memoriesAdded: totalMemoriesAdded }
 }

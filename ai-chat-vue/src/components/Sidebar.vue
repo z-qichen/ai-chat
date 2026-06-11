@@ -410,19 +410,19 @@ onUnmounted(() => {
 
 /* 头部区域 */
 .sidebar-header {
-  padding: 16px 12px 12px;
+  padding: 1rem 0.75rem 0.75rem;
   flex-shrink: 0;
 
   &__top {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
-    padding: 0 4px;
+    margin-bottom: 1rem;
+    padding: 0 0.25rem;
   }
 
   &__logo {
-    font-size: 16px;
+    font-size: 1rem;
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: -0.3px;
@@ -432,11 +432,11 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 1.75rem;
+    height: 1.75rem;
     border: none;
     background: transparent;
-    border-radius: 6px;
+    border-radius: 0.375rem;
     color: var(--text-placeholder);
     cursor: pointer;
     transition: all 0.15s;
@@ -450,16 +450,16 @@ onUnmounted(() => {
   &__new-chat {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.5rem;
     width: 255px;
-    height: 40px;
-    padding: 0 12px;
+    height: 2.5rem;
+    padding: 0 0.75rem;
     margin: 0 auto;
     border: none;
-    border-radius: 10px;
+    border-radius: 0.625rem;
     background-color: var(--bg-hover);
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 0.8125rem;
     cursor: pointer;
     transition: background-color 0.15s;
 
@@ -469,12 +469,12 @@ onUnmounted(() => {
 
     kbd {
       margin-left: auto;
-      padding: 2px 6px;
-      font-size: 11px;
+      padding: 0.125rem 0.375rem;
+      font-size: 0.6875rem;
       font-family: inherit;
       color: var(--text-placeholder);
       background: var(--bg-alt);
-      border-radius: 4px;
+      border-radius: 0.25rem;
     }
   }
 }
@@ -484,7 +484,7 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 4px;
+  padding: 0 0.25rem;
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -518,9 +518,9 @@ onUnmounted(() => {
 .session-card {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 8px 0 12px;
-  border-radius: 10px;
+  gap: 0.625rem;
+  padding: 0 0.5rem 0 0.75rem;
+  border-radius: 0.625rem;
   cursor: pointer;
   transition: background-color 0.15s;
   box-sizing: border-box;
@@ -543,9 +543,9 @@ onUnmounted(() => {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.5rem;
     background-color: var(--bg-icon);
     color: var(--text-muted);
   }
@@ -556,7 +556,7 @@ onUnmounted(() => {
   }
 
   &__title {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -574,11 +574,11 @@ onUnmounted(() => {
   &__edit-input {
     flex: 1;
     min-width: 0;
-    height: 26px;
-    padding: 0 6px;
+    height: 1.625rem;
+    padding: 0 0.375rem;
     border: 1px solid var(--accent-primary);
-    border-radius: 4px;
-    font-size: 13px;
+    border-radius: 0.25rem;
+    font-size: 0.8125rem;
     color: var(--text-secondary);
     background: var(--bg-primary);
     outline: none;
@@ -595,11 +595,11 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 1.625rem;
+    height: 1.625rem;
     border: none;
     background: transparent;
-    border-radius: 6px;
+    border-radius: 0.375rem;
     color: var(--text-placeholder);
     cursor: pointer;
     opacity: 0;
@@ -625,26 +625,26 @@ onUnmounted(() => {
     position: absolute;
     top: 100%;
     right: 0;
-    margin-top: 4px;
-    padding: 4px 0;
+    margin-top: 0.25rem;
+    padding: 0.25rem 0;
     background: var(--bg-menu);
     border: 1px solid var(--border-primary);
-    border-radius: 8px;
+    border-radius: 0.5rem;
     box-shadow: var(--shadow-md);
     z-index: 100;
-    min-width: 120px;
+    min-width: 7.5rem;
   }
 
   &__menu-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.5rem;
     width: 100%;
-    padding: 8px 12px;
+    padding: 0.5rem 0.75rem;
     border: none;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 0.8125rem;
     cursor: pointer;
     white-space: nowrap;
     transition: background-color 0.1s;
@@ -668,17 +668,17 @@ onUnmounted(() => {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 4px 4px;
+  gap: 0.25rem;
+  padding: 0 0.25rem 0.25rem;
 }
 
 .sidebar-footer__theme-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
@@ -695,11 +695,11 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   flex: 1;
-  height: 48px;
-  padding: 0 12px;
-  border-radius: 10px;
+  height: 3rem;
+  padding: 0 0.75rem;
+  border-radius: 0.625rem;
   cursor: pointer;
   transition: background-color 0.15s;
   flex-shrink: 0;
@@ -712,8 +712,8 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
     border-radius: 50%;
     background-color: var(--bg-icon);
     color: var(--text-muted);
@@ -722,7 +722,7 @@ onUnmounted(() => {
 
   &__name {
     flex: 1;
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -742,13 +742,13 @@ onUnmounted(() => {
   &__menu {
     position: absolute;
     bottom: 100%;
-    left: 16px;
-    right: 16px;
-    margin-bottom: 4px;
-    padding: 4px 0;
+    left: 1rem;
+    right: 1rem;
+    margin-bottom: 0.25rem;
+    padding: 0.25rem 0;
     background: var(--bg-menu);
     border: 1px solid var(--border-primary);
-    border-radius: 8px;
+    border-radius: 0.5rem;
     box-shadow: var(--shadow-md);
     z-index: 100;
   }
@@ -756,13 +756,13 @@ onUnmounted(() => {
   &__menu-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.5rem;
     width: 100%;
-    padding: 8px 12px;
+    padding: 0.5rem 0.75rem;
     border: none;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 0.8125rem;
     cursor: pointer;
     white-space: nowrap;
     transition: background-color 0.1s;

@@ -70,22 +70,22 @@ const hasMessages = computed(() => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 16px 16px 12px;
+  padding: 1rem 1rem 0.75rem;
   background: var(--bg-primary);
 }
 
 /* 侧边栏展开按钮（仅在折叠时显示） */
 .chat-area__toggle-btn {
   position: absolute;
-  left: 16px;
+  left: 1rem;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
   color: var(--text-placeholder);
   cursor: pointer;
   transition: all 0.15s;
@@ -113,5 +113,16 @@ const hasMessages = computed(() => {
 .message-list--grow {
   flex: 1;
   overflow-y: auto;
+}
+
+/* ---- 移动端 ---- */
+@media (max-width: 768px) {
+  .chat-area__top {
+    padding: 0.75rem 0.75rem 0.5rem;
+  }
+
+  .chat-area__toggle-btn {
+    left: 0.75rem;
+  }
 }
 </style>

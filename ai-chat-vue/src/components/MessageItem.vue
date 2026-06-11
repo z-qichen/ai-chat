@@ -108,7 +108,7 @@ function formatSize(bytes: number) {
 <style scoped lang="less">
 .message-item {
   display: flex;
-  padding: 8px 0;
+  padding: 0.5rem 0;
 
   /* 用户消息：靠右对齐 */
   &--user {
@@ -123,9 +123,9 @@ function formatSize(bytes: number) {
   /* 气泡通用样式 */
   &__bubble {
     max-width: 75%;
-    border-radius: 14px;
-    padding: 10px 16px;
-    font-size: 15px;
+    border-radius: 0.875rem;
+    padding: 0.625rem 1rem;
+    font-size: 0.9375rem;
     line-height: 1.65;
   }
 
@@ -152,18 +152,18 @@ function formatSize(bytes: number) {
   &__files {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 8px;
+    gap: 0.375rem;
+    margin-bottom: 0.5rem;
   }
 
   /* 单个附件卡片 */
   &__file {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.375rem;
     background: rgba(0, 0, 0, 0.08);
-    border-radius: 8px;
-    padding: 4px 8px;
+    border-radius: 0.5rem;
+    padding: 0.25rem 0.5rem;
     max-width: 180px;
   }
 
@@ -172,16 +172,16 @@ function formatSize(bytes: number) {
   }
 
   &__file-img {
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: 0.25rem;
     flex-shrink: 0;
   }
 
   &__file-icon {
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -190,7 +190,7 @@ function formatSize(bytes: number) {
   }
 
   &__file-name {
-    font-size: 12px;
+    font-size: 0.75rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -198,16 +198,16 @@ function formatSize(bytes: number) {
   }
 
   &__file-size {
-    font-size: 11px;
+    font-size: 0.6875rem;
     opacity: 0.6;
     flex-shrink: 0;
   }
 
   /* 深度思考面板 */
   &__thinking {
-    margin-bottom: 12px;
+    margin-bottom: 0.75rem;
     border: 1px solid var(--border-primary);
-    border-radius: 10px;
+    border-radius: 0.625rem;
     overflow: hidden;
     background: var(--bg-secondary);
   }
@@ -215,13 +215,13 @@ function formatSize(bytes: number) {
   &__thinking-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.375rem;
     width: 100%;
-    padding: 8px 12px;
+    padding: 0.5rem 0.75rem;
     border: none;
     background: none;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--text-secondary);
     transition: background 0.15s;
 
@@ -270,8 +270,8 @@ function formatSize(bytes: number) {
   }
 
   &__thinking-body {
-    padding: 0 12px 10px;
-    font-size: 14px;
+    padding: 0 0.75rem 0.625rem;
+    font-size: 0.875rem;
     line-height: 1.6;
     color: var(--text-muted);
     border-top: 1px solid var(--border-primary);
@@ -287,7 +287,7 @@ function formatSize(bytes: number) {
     :deep(pre.hljs) {
       background: var(--code-block-bg);
       color: var(--text-primary);
-      font-size: 13px;
+      font-size: 0.8125rem;
     }
   }
 
@@ -303,12 +303,12 @@ function formatSize(bytes: number) {
   /* 加载动画 */
   &__loading {
     display: flex;
-    gap: 4px;
-    padding: 4px 0;
+    gap: 0.25rem;
+    padding: 0.25rem 0;
 
     .dot {
-      width: 8px;
-      height: 8px;
+      width: 0.5rem;
+      height: 0.5rem;
       border-radius: 50%;
       background: var(--text-muted);
       animation: loading-dot 1.4s ease-in-out infinite;
@@ -322,6 +322,30 @@ function formatSize(bytes: number) {
   @keyframes loading-dot {
     0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
     40% { opacity: 1; transform: scale(1); }
+  }
+}
+
+/* ---- 移动端 ---- */
+@media (max-width: 768px) {
+  .message-item {
+    padding: 0.375rem 0;
+
+    &__bubble {
+      max-width: 85%;
+      border-radius: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+    }
+
+    &__thinking-header {
+      padding: 0.375rem 0.625rem;
+      font-size: 0.75rem;
+    }
+
+    &__thinking-body {
+      padding: 0 0.625rem 0.5rem;
+      font-size: 0.8125rem;
+    }
   }
 }
 </style>

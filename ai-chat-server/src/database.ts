@@ -91,4 +91,24 @@ try {
   // 列已存在，忽略
 }
 
+// v4 迁移：用户记忆表，支持跨对话记忆持久化
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_memories (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    category   TEXT NOT NULL CHECK(category IN ('identity','address','preference','background','other')),
+    key        TEXT NOT NULL,
+    value      TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 1.0,
+    source     TEXT NOT NULL DEFAULT 'auto' CHECK(source IN ('auto','manual')),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, key)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_user_memories_user_id
+    ON user_memories(user_id);
+`)
+
 export default db

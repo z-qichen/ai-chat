@@ -435,12 +435,12 @@ function formatSize(bytes: number) {
 .chat-input-wrapper {
   display: flex;
   justify-content: center;
-  padding: 0 24px;
+  padding: 0 1.5rem;
   flex-shrink: 0;
 
   /* 紧凑模式 */
   &--compact {
-    padding: 16px 24px 24px;
+    padding: 1rem 1.5rem 1.5rem;
   }
 }
 
@@ -450,16 +450,16 @@ function formatSize(bytes: number) {
   max-width: 800px;
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
-  border-radius: 16px;
-  padding: 16px;
+  border-radius: 1rem;
+  padding: 1rem;
   box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
 
   /* 紧凑模式：小圆角、小内边距、轻阴影 */
   &--compact {
     max-width: 800px;
-    border-radius: 12px;
-    padding: 10px 16px;
+    border-radius: 0.75rem;
+    padding: 0.625rem 1rem;
     box-shadow: var(--shadow-sm);
     border-color: var(--border-secondary);
 
@@ -478,18 +478,18 @@ function formatSize(bytes: number) {
 /* 操作按钮行 */
 .chat-input__actions {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .chat-input__action-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
   border: 1px solid var(--border-primary);
-  border-radius: 20px;
-  font-size: 13px;
+  border-radius: 1.25rem;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   background: var(--bg-input);
   cursor: pointer;
@@ -523,8 +523,8 @@ function formatSize(bytes: number) {
 .chat-input__files {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 /* 单个文件卡片 */
@@ -532,46 +532,46 @@ function formatSize(bytes: number) {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   background: var(--bg-file);
   border: 1px solid var(--border-primary);
-  border-radius: 10px;
-  padding: 6px 10px;
+  border-radius: 0.625rem;
+  padding: 0.375rem 0.625rem;
   max-width: 220px;
   overflow: hidden;
 }
 
 .chat-input__file-thumb {
-  width: 40px;
-  height: 40px;
+  width: 2.5rem;
+  height: 2.5rem;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   flex-shrink: 0;
 }
 
 .chat-input__file-icon {
-  width: 40px;
-  height: 40px;
+  width: 2.5rem;
+  height: 2.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-file-icon);
-  border-radius: 6px;
+  border-radius: 0.375rem;
   color: var(--accent-primary);
   flex-shrink: 0;
 }
 
 .chat-input__file-name {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80px;
+  max-width: 5rem;
 }
 
 .chat-input__file-size {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-placeholder);
   flex-shrink: 0;
 }
@@ -579,10 +579,10 @@ function formatSize(bytes: number) {
 /* 文件移除按钮（悬浮在右上角） */
 .chat-input__file-remove {
   position: absolute;
-  top: -6px;
-  right: -5px;
-  width: 20px;
-  height: 20px;
+  top: -0.375rem;
+  right: -0.3125rem;
+  width: 1.25rem;
+  height: 1.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -605,7 +605,7 @@ function formatSize(bytes: number) {
 .chat-input__body {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 /* 文本输入框 */
@@ -614,12 +614,12 @@ function formatSize(bytes: number) {
   border: none;
   outline: none;
   resize: none;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--text-primary);
   background: transparent;
-  min-height: 24px;
-  max-height: 200px;
+  min-height: 1.5rem;
+  max-height: 12.5rem;
 
   &::placeholder {
     color: var(--text-placeholder);
@@ -627,14 +627,14 @@ function formatSize(bytes: number) {
 }
 
 .chat-input--compact .chat-input__textarea {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* 发送按钮 */
 .chat-input__send-btn {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 2.25rem;
+  height: 2.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -659,8 +659,8 @@ function formatSize(bytes: number) {
 /* 停止生成按钮 */
 .chat-input__stop-btn {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 2.25rem;
+  height: 2.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -681,11 +681,11 @@ function formatSize(bytes: number) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
   background: var(--warning-light, #fef3c7);
   border-bottom: 1px solid var(--warning-border, #fcd34d);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
 }
 
@@ -695,10 +695,10 @@ function formatSize(bytes: number) {
 }
 
 .chat-input__continue-btn {
-  padding: 2px 12px;
+  padding: 0.125rem 0.75rem;
   border: 1px solid var(--accent-primary);
-  border-radius: 14px;
-  font-size: 12px;
+  border-radius: 0.875rem;
+  font-size: 0.75rem;
   color: var(--accent-primary);
   background: transparent;
   cursor: pointer;
@@ -714,8 +714,40 @@ function formatSize(bytes: number) {
 /* 底部提示文字 */
 .chat-input__tip {
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-placeholder);
-  margin-top: 12px;
+  margin-top: 0.75rem;
+}
+
+/* ---- 移动端 ---- */
+@media (max-width: 768px) {
+  .chat-input-wrapper {
+    padding: 0 0.75rem;
+
+    &--compact {
+      padding: 0.75rem 0.75rem 1rem;
+    }
+  }
+
+  .chat-input {
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+
+    &--compact {
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.625rem;
+    }
+  }
+
+  .chat-input__actions {
+    gap: 0.375rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .chat-input__action-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    gap: 0.125rem;
+  }
 }
 </style>
