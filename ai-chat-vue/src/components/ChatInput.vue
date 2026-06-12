@@ -19,7 +19,7 @@
 -->
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
-import { streamReply, continueChat, stopChat, addMessage } from '@/services/api'
+import { streamReply, continueChat, stopChat, addMessage, uploadFile } from '@/services/api'
 import { useConfigStore } from '@/stores/config'
 import { useConversationStore } from '@/stores/conversation'
 import type { Message, AttachedFile } from '@/types'
@@ -52,6 +52,9 @@ interface UploadedFile {
   id: string
   file: File
   previewUrl: string | null // 图片有 blob URL 预览，文档为 null
+  fileId: string | null     // 后端上传成功后返回的 ID
+  uploading: boolean
+  error: string | null
 }
 
 const uploadedFiles = ref<UploadedFile[]>([])
@@ -72,19 +75,35 @@ function isImage(file: File) {
 }
 
 let _fileId = 0
-/** 处理文件选择：过滤类型后加入上传列表 */
+/** 处理文件选择：加入上传列表，立即上传到后端获取 fileId */
 function handleFiles(files: FileList) {
   for (let i = 0; i < files.length; i++) {
     const file = files[i]
     const ext = getFileExt(file.name)
-    // 只接受图片和文档类型
     if (!imageExts.has(ext) && !docExts.has(ext)) continue
 
     const id = String(++_fileId)
     const previewUrl = isImage(file) ? URL.createObjectURL(file) : null
-    uploadedFiles.value.push({ id, file, previewUrl })
+    const entry: UploadedFile = {
+      id,
+      file,
+      previewUrl,
+      fileId: null,
+      uploading: true,
+      error: null,
+    }
+    uploadedFiles.value.push(entry)
+
+    uploadFile(file)
+      .then((res) => {
+        entry.fileId = res.fileId
+        entry.uploading = false
+      })
+      .catch((err) => {
+        entry.uploading = false
+        entry.error = err.message || '上传失败'
+      })
   }
-  // 清空 file input 的值，允许重复选择相同文件
   fileInputRef.value!.value = ''
 }
 
@@ -146,6 +165,11 @@ async function send() {
     isImage: f.previewUrl !== null,
   }))
 
+  // 收集已上传成功的文件 ID
+  const fileIds = uploadedFiles.value
+    .filter((f) => f.fileId !== null)
+    .map((f) => f.fileId!)
+
   // 清空输入状态
   inputText.value = ''
   uploadedFiles.value = []
@@ -174,7 +198,7 @@ async function send() {
 
   // 保存用户消息到后端
   try {
-    await addMessage(conversationId, 'user', userMessage)
+    await addMessage(conversationId, 'user', userMessage, fileIds)
   } catch (err) {
     console.error('保存用户消息失败:', err)
   }
@@ -362,9 +386,17 @@ function formatSize(bytes: number) {
           v-for="f in uploadedFiles"
           :key="f.id"
           class="chat-input__file-card"
+          :class="{ 'chat-input__file-card--error': f.error, 'chat-input__file-card--uploading': f.uploading }"
         >
+          <!-- 上传中：显示加载动画 -->
+          <div v-if="f.uploading" class="chat-input__file-spinner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="20" height="20">
+              <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+              <path d="M12 2a10 10 0 019.95 9" stroke-linecap="round"/>
+            </svg>
+          </div>
           <!-- 图片：显示缩略图 -->
-          <img v-if="f.previewUrl" :src="f.previewUrl" class="chat-input__file-thumb" />
+          <img v-else-if="f.previewUrl" :src="f.previewUrl" class="chat-input__file-thumb" />
           <!-- 文档：显示图标 -->
           <div v-else class="chat-input__file-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
@@ -375,7 +407,7 @@ function formatSize(bytes: number) {
             </svg>
           </div>
           <span class="chat-input__file-name" :title="f.file.name">{{ f.file.name }}</span>
-          <span class="chat-input__file-size">{{ formatSize(f.file.size) }}</span>
+          <span class="chat-input__file-size">{{ f.uploading ? '上传中...' : f.error ? '上传失败' : formatSize(f.file.size) }}</span>
           <!-- 移除按钮 -->
           <button class="chat-input__file-remove" @click="removeFile(f.id)" title="移除">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
@@ -539,6 +571,31 @@ function formatSize(bytes: number) {
   padding: 0.375rem 0.625rem;
   max-width: 220px;
   overflow: hidden;
+
+  &--error {
+    border-color: var(--danger-border, #fca5a5);
+    background: var(--danger-light, #fef2f2);
+  }
+
+  &--uploading {
+    border-color: var(--accent-border, #c4b5fd);
+  }
+}
+
+/* 上传中旋转动画 */
+.chat-input__file-spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .chat-input__file-thumb {

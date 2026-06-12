@@ -9,6 +9,7 @@
  */
 import OpenAI from 'openai'
 import { config } from '../config.ts'
+import { logger } from '../logger.ts'
 import type { StreamChunk, ContentPart, ThinkingConfig } from '../types/index.ts'
 
 const client = new OpenAI({
@@ -109,7 +110,38 @@ export async function* chatStream(
     params.tools = tools
   }
 
-  const stream = await client.chat.completions.create(params as any, { signal }) as any
+  const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
+  logger.request('DeepSeek API 调用', {
+    model,
+    thinking: exposeThinking,
+    toolCount: tools?.length ?? 0,
+    msgCount: messages.length,
+    signalAborted: signal?.aborted ?? 'no-signal',
+    lastUserMsg: typeof lastUserMsg?.content === 'string'
+      ? (lastUserMsg.content as string).slice(0, 80)
+      : '(非文本)',
+  })
+
+  let stream: any
+  try {
+    if (signal?.aborted) {
+      logger.error('DeepSeek API 调用时 signal 已被提前中断')
+      throw new Error('Signal already aborted before API call')
+    }
+    stream = await client.chat.completions.create(params as any, { signal }) as any
+  } catch (err) {
+    const e = err as any
+    logger.error('DeepSeek API 创建流失败', {
+      message: e.message,
+      status: e.status,
+      code: e.code,
+      type: e.type,
+      name: e.name,
+      stack: e.stack?.split('\n').slice(0, 3).join('\n'),
+      headers: e.headers,
+    })
+    throw err
+  }
 
   let reasoningActive = false
   const acc: StreamAccumulator = {
@@ -119,14 +151,17 @@ export async function* chatStream(
   }
   /** 是否正在接收 tool_calls（此时不再向客户端推送 content） */
   let toolCallMode = false
+  let chunkCount = 0
 
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta as any
+    chunkCount++
 
     if (delta?.tool_calls) {
       if (!toolCallMode) {
         toolCallMode = true
         acc.hasToolCalls = true
+        logger.info('检测到 tool_calls，进入工具调用模式')
       }
       for (const tc of delta.tool_calls) {
         const index: number = tc.index ?? 0
@@ -144,6 +179,7 @@ export async function* chatStream(
     if (delta?.reasoning_content) {
       if (!reasoningActive) {
         reasoningActive = true
+        logger.info('开始接收 reasoning_content')
       }
       if (exposeThinking) {
         yield { content: delta.reasoning_content, done: false, type: 'thinking' }
@@ -152,7 +188,10 @@ export async function* chatStream(
     }
 
     if (delta?.content) {
-      if (reasoningActive) reasoningActive = false
+      if (reasoningActive) {
+        reasoningActive = false
+        logger.info('reasoning 结束，开始接收 content')
+      }
       if (toolCallMode) {
         acc.content += delta.content
       } else {
@@ -161,6 +200,8 @@ export async function* chatStream(
     }
   }
 
+  logger.info('DeepSeek 流结束', { totalChunks: chunkCount, hasToolCalls: acc.hasToolCalls, toolCount: acc.toolCalls.size })
+
   if (acc.hasToolCalls) {
     const toolCalls: ToolCallResult[] = Array.from(acc.toolCalls.values())
       .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
@@ -168,6 +209,7 @@ export async function* chatStream(
         id: tc.id,
         function: { name: tc.name, arguments: tc.arguments },
       }))
+    logger.info('返回 tool_calls', { count: toolCalls.length, names: toolCalls.map(t => t.function.name) })
     yield {
       content: '',
       done: true,
@@ -178,8 +220,10 @@ export async function* chatStream(
   }
 
   if (toolCallMode && acc.content) {
+    logger.info('刷新工具调用期间累积的内容', { length: acc.content.length })
     yield { content: acc.content, done: false, type: 'answer' }
   }
 
+  logger.end('DeepSeek API 调用完成', { answerChunks: chunkCount })
   yield { content: '', done: true, type: 'answer' }
 }

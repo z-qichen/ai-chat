@@ -81,6 +81,19 @@ export interface StreamChunk {
   aborted?: boolean
 }
 
+/** 文件上传 API 响应 */
+export interface UploadFileResponse {
+  fileId: string
+  originalName: string
+  mimeType: string
+  size: number
+}
+
+/** 文件元数据（查询接口返回，含创建时间） */
+export interface FileMeta extends UploadFileResponse {
+  createdAt: number
+}
+
 /** 登录/注册响应的用户信息 */
 export interface User {
   id: string

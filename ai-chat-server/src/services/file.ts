@@ -141,7 +141,7 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string | null> {
     const { PDFParse } = await import('pdf-parse')
     const parser = new PDFParse({ data: buffer })
     const result = await parser.getText()
-    return result.text?.slice(0, 50000) ?? null
+    return (result as any).text?.slice(0, 50000) ?? null
   } catch {
     return null
   }

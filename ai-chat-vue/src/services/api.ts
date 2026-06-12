@@ -11,7 +11,7 @@
  *     后端就绪后，取消注释各方法内的 fetch 调用即可接入。
  */
 
-import type { SessionMeta, Message, StreamChunk, AuthResponse } from '@/types'
+import type { SessionMeta, Message, StreamChunk, AuthResponse, UploadFileResponse, FileMeta } from '@/types'
 
 /** 后端 API 基础地址 */
 const BASE = 'http://localhost:4000/api'
@@ -132,15 +132,17 @@ export function getMessages(
  * @param id       会话 ID
  * @param role     角色：user / assistant / system
  * @param content  消息内容
+ * @param files    附件文件 ID 列表，以 JSON 字符串存储
  */
 export function addMessage(
   id: string,
   role: 'user' | 'assistant' | 'system',
-  content: string
+  content: string,
+  files?: string[]
 ): Promise<Message> {
   return request(`/conversations/${id}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ role, content }),
+    body: JSON.stringify({ role, content, files: files?.length ? JSON.stringify(files) : undefined }),
   })
 }
 
@@ -333,4 +335,40 @@ export function validateModel(model: string): Promise<ValidateModelResponse> {
     method: 'POST',
     body: JSON.stringify({ model }),
   })
+}
+
+// ---- 文件上传 API ----
+
+/**
+ * 上传文件到后端
+ *
+ * 使用 FormData multipart 方式上传单个文件，
+ * 成功后返回文件 ID 供后续消息引用。
+ */
+export function uploadFile(file: File): Promise<UploadFileResponse> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const headers: Record<string, string> = {}
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  return fetch(`${BASE}/files/upload`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  }).then(async (res) => {
+    if (!res.ok) {
+      const body = await res.text()
+      let message = `上传失败 (${res.status})`
+      try { message = JSON.parse(body).error || message } catch {}
+      throw new Error(message)
+    }
+    return res.json()
+  })
+}
+
+/** 查询文件元数据 */
+export function getFileMeta(fileId: string): Promise<FileMeta> {
+  return request<FileMeta>(`/files/${fileId}`)
 }

@@ -6,8 +6,11 @@
 
 ```
 ai-chat/
-├── ai-chat-server/   # 后端服务 (Fastify 5 + TypeScript + SQLite)
-├── ai-chat-vue/      # 前端应用 (Vue 3 + TypeScript + Vite + Element Plus)
+├── ai-chat-server/       # 后端服务 (Fastify 5 + TypeScript + SQLite)
+├── ai-chat-vue/          # 前端应用 (Vue 3 + TypeScript + Vite + Element Plus)
+├── package.json          # 根工作区配置
+├── pnpm-workspace.yaml   # pnpm monorepo 配置
+├── pnpm-lock.yaml
 └── .gitignore
 ```
 
@@ -30,29 +33,17 @@ ai-chat/
 ### 安装依赖
 
 ```bash
-# 后端
-cd ai-chat-server
-cp .env.example .env   # 编辑 .env 填入 DeepSeek API Key 等配置
-pnpm install
-
-# 前端
-cd ai-chat-vue
+cp ai-chat-server/.env.example ai-chat-server/.env   # 编辑 .env 填入 DeepSeek API Key 等配置
 pnpm install
 ```
 
 ### 启动开发
 
 ```bash
-# 终端 1 — 启动后端 (端口 4000)
-cd ai-chat-server
-pnpm run dev
-
-# 终端 2 — 启动前端 (端口 3000)
-cd ai-chat-vue
-pnpm run dev
+pnpm dev
 ```
 
-浏览器打开 `http://localhost:3000`，注册账号后即可使用。
+前后端同时启动：后端端口 4000，前端端口 3000。浏览器打开 `http://localhost:3000`，注册账号后即可使用。
 
 ## 功能
 
@@ -83,6 +74,3 @@ pnpm run dev
 | POST | `/api/models/validate` | — | 模型校验 |
 | GET | `/api/health` | — | 健康检查 |
 
-## 许可证
-
-MIT

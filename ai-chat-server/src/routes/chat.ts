@@ -17,6 +17,7 @@ import { createMessage, updateMessage, listAllMessages } from '../services/messa
 import { getConversationByUser, createConversation, updateConversation } from '../services/conversation.ts'
 import { buildMessages } from '../services/chat.ts'
 import { getMemoryTool, handleExtractToolCalls, injectMemoriesIntoSystemPrompt } from '../services/memory.ts'
+import { logger } from '../logger.ts'
 import type { StreamRequestWithFiles, StreamChunk } from '../types/index.ts'
 
 /** 记忆提取最大轮次，防止无限循环 */
@@ -40,6 +41,7 @@ export default async function chatRoutes(app: FastifyInstance) {
 
       const controller = activeStreams.get(id)
       if (controller) {
+        logger.info('停止流式生成', { conversationId: id })
         controller.abort()
         return { success: true }
       }
@@ -76,14 +78,28 @@ export default async function chatRoutes(app: FastifyInstance) {
 
       const controller = new AbortController()
       activeStreams.set(id, controller)
-      request.raw.on('close', () => controller.abort())
+      // 使用 setImmediate 延迟注册，避免 Fastify reply.send() 内部触发的 close 事件误杀
+      setImmediate(() => {
+        if (!controller.signal.aborted) {
+          request.raw.on('close', () => controller.abort())
+        }
+      })
 
       let fullContent = ''
       let fullReasoningContent = ''
 
+      logger.separator()
+      logger.request('POST /chat/stream', {
+        conversationId: id,
+        userId,
+        model,
+        thinking: isThinking,
+      })
+
       try {
         const memoryTool = getMemoryTool()
 
+        logger.info('开始调用 streamWithMemoryExtraction', { maxRounds: MAX_MEMORY_ROUNDS })
         const result = await streamWithMemoryExtraction({
           conversationId: id,
           userId,
@@ -92,6 +108,10 @@ export default async function chatRoutes(app: FastifyInstance) {
           thinking,
           memoryTool,
           maxRounds: MAX_MEMORY_ROUNDS,
+        })
+        logger.info('streamWithMemoryExtraction 完成', {
+          chunkCount: result.chunks.length,
+          memoriesAdded: result.memoriesAdded,
         })
 
         for (const chunk of result.chunks) {
@@ -102,6 +122,7 @@ export default async function chatRoutes(app: FastifyInstance) {
               fullContent += chunk.content
             }
           }
+          logger.chunk(chunk.content || '(空)', chunk.type)
           stream.push(`data: ${JSON.stringify(chunk)}\n\n`)
         }
 
@@ -124,8 +145,14 @@ export default async function chatRoutes(app: FastifyInstance) {
         })
 
         updateConversation(id, {})
+        logger.end('POST /chat/stream 完成', {
+          answerLength: fullContent.length,
+          reasoningLength: fullReasoningContent.length,
+        })
       } catch (error: any) {
+        logger.error('POST /chat/stream 出错', error)
         if (controller.signal.aborted && fullContent) {
+          logger.info('中断但有部分内容，保存 partial', { partialLength: fullContent.length })
           createMessage({
             conversationId: id,
             role: 'assistant',
@@ -143,6 +170,7 @@ export default async function chatRoutes(app: FastifyInstance) {
           activeStreams.delete(id)
         }
         stream.push(null)
+        logger.info('流已关闭')
       }
     }
   )
@@ -174,10 +202,17 @@ export default async function chatRoutes(app: FastifyInstance) {
 
       const controller = new AbortController()
       activeStreams.set(id, controller)
-      request.raw.on('close', () => controller.abort())
+      setImmediate(() => {
+        if (!controller.signal.aborted) {
+          request.raw.on('close', () => controller.abort())
+        }
+      })
 
       let newContent = ''
       let newReasoningContent = ''
+
+      logger.separator()
+      logger.request('POST /chat/continue', { conversationId: id, model: reqModel })
 
       try {
         const deepseekStream = chatStream({ messages, model: reqModel, signal: controller.signal, thinking })
@@ -211,7 +246,12 @@ export default async function chatRoutes(app: FastifyInstance) {
         }
 
         updateConversation(id, {})
+        logger.end('POST /chat/continue 完成', {
+          answerLength: newContent.length,
+          reasoningLength: newReasoningContent.length,
+        })
       } catch (error: any) {
+        logger.error('POST /chat/continue 出错', error)
         if (controller.signal.aborted && newContent) {
           const allMsgs = listAllMessages(id)
           const partialMsg = allMsgs.reverse().find(m => m.partial)
@@ -261,6 +301,8 @@ async function streamWithMemoryExtraction(params: {
     const isLastRound = round === maxRounds - 1
     const tools = isLastRound ? [] : [memoryTool]
 
+    logger.info(`记忆提取轮次 ${round + 1}/${maxRounds}`, { isLastRound, hasTools: tools.length > 0 })
+
     const deepseekStream = chatStream({ messages, model, signal, thinking, tools })
     const chunks: StreamChunk[] = []
     let toolCalls: StreamChunk['toolCalls'] | undefined
@@ -274,12 +316,15 @@ async function streamWithMemoryExtraction(params: {
     }
 
     if (!toolCalls) {
+      logger.info(`轮次 ${round + 1} 无工具调用，返回 ${chunks.length} 个chunk`)
       return { chunks, memoriesAdded: totalMemoriesAdded }
     }
 
     // 处理 tool_calls，写入记忆
+    logger.info(`轮次 ${round + 1} 收到 ${toolCalls.length} 个工具调用`)
     const count = handleExtractToolCalls(toolCalls, userId)
     totalMemoriesAdded += count
+    logger.info(`已写入 ${count} 条记忆（累计 ${totalMemoriesAdded}）`)
 
     if (count === 0) {
       return { chunks, memoriesAdded: totalMemoriesAdded }
@@ -309,11 +354,13 @@ async function streamWithMemoryExtraction(params: {
   }
 
   // 最后一轮：不带 tools 的纯流式回复
+  logger.info('进入最终轮次：不带工具的纯流式回复')
   const finalStream = chatStream({ messages, model, signal, thinking, tools: [] })
   const chunks: StreamChunk[] = []
   for await (const chunk of finalStream) {
     chunks.push(chunk)
   }
+  logger.info(`最终轮次完成，返回 ${chunks.length} 个chunk`)
 
   return { chunks, memoriesAdded: totalMemoriesAdded }
 }

@@ -68,8 +68,6 @@ export const useChatStore = defineStore('chat', () => {
   /** 新建空白会话：当前会话有消息时才新建，否则复用空会话 */
   function createNewChat() {
     const current = currentConversation()
-    console.log(111);
-    
     if (!current || current.messages.length > 0) {
       const id = `conv_${Date.now()}`
       conversations.value.unshift({

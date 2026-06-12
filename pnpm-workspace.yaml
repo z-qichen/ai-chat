@@ -1,0 +1,9 @@
+packages:
+  - 'ai-chat-server'
+  - 'ai-chat-vue'
+allowBuilds:
+  better-sqlite3: true
+  esbuild: true
+  vue-demi: true
+minimumReleaseAgeExclude:
+  - '@vue/shared@3.5.36'
