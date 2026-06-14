@@ -48,6 +48,72 @@ interface CacheEntry {
   total: number
 }
 
+/**
+ * 解析消息中的 files 字段，将 JSON 字符串转为 AttachedFile[]
+ *
+ * 后端存储的 files 是文件 ID 的 JSON 字符串（如 '["uuid1","uuid2"]'），
+ * 渲染需要包含 name / size 的 AttachedFile 对象数组。
+ * 通过调用文件元数据接口，将字符串替换为结构化对象。
+ */
+async function resolveMessageFiles(messages: Message[]) {
+  const fileIdSet = new Set<string>()
+  const messagesToResolve: { message: Message; ids: string[] }[] = []
+
+  for (const message of messages) {
+    if (typeof message.files === 'string') {
+      try {
+        const ids: string[] = JSON.parse(message.files)
+        if (Array.isArray(ids) && ids.length > 0) {
+          messagesToResolve.push({ message, ids })
+          ids.forEach((id) => fileIdSet.add(id))
+        } else {
+          message.files = undefined
+        }
+      } catch {
+        message.files = undefined
+      }
+    }
+  }
+
+  if (fileIdSet.size === 0) return
+
+  const { getFileMeta } = await import('@/services/api')
+  const metaMap = new Map<string, { name: string; size: number; isImage: boolean }>()
+
+  const results = await Promise.allSettled(
+    [...fileIdSet].map(async (id) => {
+      const meta = await getFileMeta(id)
+      return { id, meta }
+    })
+  )
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      const { id, meta } = result.value
+      metaMap.set(id, {
+        name: meta.originalName,
+        size: meta.size,
+        isImage: meta.mimeType.startsWith('image/'),
+      })
+    }
+  }
+
+  for (const { message, ids } of messagesToResolve) {
+    message.files = ids
+      .map((id) => {
+        const meta = metaMap.get(id)
+        if (!meta) return null
+        return {
+          name: meta.name,
+          size: meta.size,
+          previewUrl: null,
+          isImage: meta.isImage,
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+  }
+}
+
 export const useConversationStore = defineStore('conversation', () => {
   // ============================================================
   // State
@@ -200,6 +266,7 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       const { getMessages } = await import('@/services/api')
       const res = await getMessages(id, undefined, PAGE_SIZE)
+      await resolveMessageFiles(res.messages)
       const existingMessages = messagesCache.value[id]?.messages ?? []
       const mergedMessages = [...res.messages]
       for (const message of existingMessages) {
@@ -240,6 +307,7 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       const { getMessages } = await import('@/services/api')
       const res = await getMessages(id, cache.cursor, PAGE_SIZE)
+      await resolveMessageFiles(res.messages)
       // 将更早的消息插入到数组头部（保持正序：旧→新）
       cache.messages.unshift(...res.messages)
       cache.hasMore = res.hasMore

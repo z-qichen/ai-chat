@@ -27,6 +27,7 @@ function isThinkingInProgress() {
 
 /** 格式化文件大小为可读字符串 */
 function formatSize(bytes: number) {
+  if (bytes == null || isNaN(bytes) || bytes < 0) return '--'
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
@@ -38,7 +39,7 @@ function formatSize(bytes: number) {
     <!-- 消息气泡 -->
     <div class="message-item__bubble">
       <!-- 附件预览区 -->
-      <div v-if="message.files && message.files.length > 0" class="message-item__files">
+      <div v-if="message.files && Array.isArray(message.files) && message.files.length > 0" class="message-item__files">
         <div v-for="(f, i) in message.files" :key="i" class="message-item__file">
           <!-- 图片文件：显示缩略图 -->
           <img v-if="f.previewUrl" :src="f.previewUrl" class="message-item__file-img" />
