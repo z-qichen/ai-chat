@@ -34,12 +34,12 @@ pnpm run start            # 生产启动
 - [x] 消息游标分页查询 (按时间倒序，支持无限滚动加载历史消息)
 - [x] SSE 流式对话 (加载历史 → 调用 DeepSeek API → 实时推送 chunk → 保存 AI 回复)
 - [x] 文件识别处理 — 上传、文本提取(PDF/DOCX/代码)、图片 base64 编码、多模态消息构建
+- [x] 跨标签记忆 — 自动提取用户关键信息（身份/住址/喜好等），注入 system prompt 实现个性化回复，含冲突裁决与上限管理
 
 ### 待完成
 - [ ] 错误处理中间件 (统一错误格式)
 - [ ] 单元测试
 - [ ] Docker 部署支持
-- [ ] 跨标签记忆，在会话中沉淀用户关键信息，比如身份，住址，喜好等，后续会话中涉及身份，住址等相关内容就可以快速获取用户信息从而达到输出符合用户预期的答案
 ## 目录结构
 
 ```
@@ -62,6 +62,7 @@ src/
 │   ├── messages.ts           # 消息分页 + 保存消息
 │   ├── chat.ts               # POST /api/conversations/:id/chat/stream（SSE 流式回复）
 │   ├── files.ts              # POST /api/files/upload（文件上传） | GET /api/files/:id（文件元数据）
+│   ├── memory.ts             # GET/POST/DELETE /api/memories（记忆管理）
 │   └── models.ts             # POST /api/models/validate（模型校验）
 └── services/
     ├── user.ts               # 用户数据库操作（注册、查询）
@@ -69,7 +70,8 @@ src/
     ├── message.ts            # 消息数据库操作（列表分页、创建）
     ├── deepseek.ts           # DeepSeek API 代理（chat + chatStream），封装 OpenAI SDK
     ├── file.ts               # 文件处理服务（存储、文本提取、图片编码）
-    └── chat.ts               # 聊天消息构建服务（历史消息 + 文件 → OpenAI 多模态格式）
+    ├── chat.ts               # 聊天消息构建服务（历史消息 + 文件 → OpenAI 多模态格式）
+    └── memory.ts             # 记忆服务（提取/存储/冲突裁决/注入 system prompt）
 ```
 
 ## API 路由
@@ -156,6 +158,16 @@ src/
 
 **文件上传大小限制：** 10MB（可通过 `MAX_FILE_SIZE` 环境变量配置）
 
+### 记忆管理（需要 JWT）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/memories` | 获取当前用户所有记忆 |
+| POST | `/api/memories` | 手动添加记忆，body: `{ category, key, value }` |
+| DELETE | `/api/memories/:id` | 删除指定记忆 |
+
+记忆分类（category）：`identity`（身份）、`address`（住址）、`preference`（偏好）、`background`（背景）、`other`（其他）
+
 ### 公共
 
 | 方法 | 路径 | 说明 |
@@ -170,6 +182,7 @@ src/
 - **conversations** — `id`, `user_id`(FK), `title`, `model`, `created_at`, `updated_at`
 - **messages** — `id`, `conversation_id`(FK), `role`, `content`, `timestamp`, `files`
 - **uploaded_files** — `id`, `user_id`(FK), `original_name`, `mime_type`, `size`, `stored_path`, `extracted_text`, `created_at`
+- **user_memories** — `id`, `user_id`(FK), `category`(identity/address/preference/background/other), `key`, `value`, `confidence`(0~1), `source`(auto/manual), `created_at`, `updated_at`，UNIQUE(user_id, key)
 
 ### 文件处理流程
 

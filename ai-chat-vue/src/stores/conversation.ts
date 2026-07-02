@@ -196,8 +196,11 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch { /* 存储满或私有模式下忽略 */ }
   }
 
-  // 初始化时恢复数据
+  // 初始化时恢复本地数据
   hydrate()
+
+  // 如果有 token，从后端同步最新会话列表（异步，不阻塞渲染）
+  syncFromBackend()
 
   // 自动持久化
   watch(sessions, persist, { deep: true })
@@ -231,6 +234,11 @@ export const useConversationStore = defineStore('conversation', () => {
 
   /** 删除指定会话 */
   function deleteSession(id: string) {
+    // 异步同步后端（fire-and-forget，不阻塞本地操作）
+    import('@/services/api').then(({ deleteConversation }) => {
+      deleteConversation(id).catch(() => {})
+    })
+    // 本地立即删除
     sessions.value = sessions.value.filter((s) => s.id !== id)
     delete messagesCache.value[id]
     if (currentId.value === id) {
@@ -240,10 +248,44 @@ export const useConversationStore = defineStore('conversation', () => {
 
   /** 修改会话标题 */
   function updateTitle(id: string, title: string) {
+    // 本地乐观更新
     const session = sessions.value.find((s) => s.id === id)
     if (session) {
       session.title = title
       session.updatedAt = Date.now()
+    }
+    // 异步同步后端（fire-and-forget）
+    import('@/services/api').then(({ updateConversation }) => {
+      updateConversation(id, title).catch(() => {})
+    })
+  }
+
+  /** 用后端数据替换本地会话列表（登录后同步） */
+  function replaceSessions(list: SessionMeta[]) {
+    sessions.value = list
+    // 清除旧用户的消息缓存
+    messagesCache.value = {}
+    // 如果当前选中的会话不在新列表中，重置
+    if (currentId.value && !list.some((s) => s.id === currentId.value)) {
+      currentId.value = list.length > 0 ? list[0].id : null
+    }
+    // 若没有当前会话，默认选中第一条
+    if (!currentId.value && list.length > 0) {
+      currentId.value = list[0].id
+    }
+  }
+
+  /** 应用启动时从后端拉取最新会话列表，清洗掉本地脏数据（后端不可用时保留本地数据） */
+  async function syncFromBackend() {
+    const token = localStorage.getItem('ai-chat-token')
+    if (!token) return
+    try {
+      const { getConversations } = await import('@/services/api')
+      const backendSessions = await getConversations()
+      if (localStorage.getItem('ai-chat-token') !== token) return
+      replaceSessions(backendSessions)
+    } catch {
+      // 后端不可用，保留本地数据
     }
   }
 
@@ -431,6 +473,8 @@ export const useConversationStore = defineStore('conversation', () => {
     hydrate,
     persist,
     // 会话管理
+    replaceSessions,
+    syncFromBackend,
     createSession,
     deleteSession,
     updateTitle,

@@ -30,6 +30,7 @@ function initSidebarState() {
 
 onMounted(() => {
   initSidebarState()
+  store.syncFromBackend()
   window.addEventListener('resize', initSidebarState)
 })
 

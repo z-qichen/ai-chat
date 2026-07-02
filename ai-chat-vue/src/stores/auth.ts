@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { User } from '@/types'
+import type { User, SessionMeta } from '@/types'
 import { login as apiLogin, register as apiRegister } from '@/services/api'
+import { useConversationStore } from '@/stores/conversation'
 
 const TOKEN_KEY = 'ai-chat-token'
 const USER_KEY = 'ai-chat-user'
@@ -57,7 +58,13 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     removeToken()
     removeUser()
+    localStorage.removeItem('ai-chat-sessions')
     error.value = ''
+    // 清空 conversation store 内存状态，防止切换账号后残留旧数据
+    const cs = useConversationStore()
+    cs.sessions = []
+    cs.messagesCache = {}
+    cs.currentId = null
   }
 
   async function doLogin(username: string, password: string): Promise<boolean> {
@@ -66,6 +73,14 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await apiLogin(username, password)
       setAuth(res.token, res.user)
+      // 将后端返回的会话列表同步到 conversation store
+      const conversationStore = useConversationStore()
+      conversationStore.replaceSessions(res.conversations.map((c): SessionMeta => ({
+        id: c.id,
+        title: c.title,
+        updatedAt: c.updatedAt,
+        messageCount: 0,
+      })))
       return true
     } catch (e: any) {
       error.value = e.message || '登录失败'

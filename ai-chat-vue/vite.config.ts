@@ -33,6 +33,7 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
     },
+    extensions: ['.ts', '.tsx', '.vue', '.mjs', '.js', '.mts', '.jsx', '.json'],
   },
   server: {
     port: 3000,

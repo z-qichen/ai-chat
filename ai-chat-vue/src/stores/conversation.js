@@ -31,6 +31,67 @@ import { ref, watch } from 'vue';
 const STORAGE_KEY = 'ai-chat-sessions';
 /** 每页消息数量 */
 const PAGE_SIZE = 50;
+/**
+ * 解析消息中的 files 字段，将 JSON 字符串转为 AttachedFile[]
+ *
+ * 后端存储的 files 是文件 ID 的 JSON 字符串（如 '["uuid1","uuid2"]'），
+ * 渲染需要包含 name / size 的 AttachedFile 对象数组。
+ * 通过调用文件元数据接口，将字符串替换为结构化对象。
+ */
+async function resolveMessageFiles(messages) {
+    const fileIdSet = new Set();
+    const messagesToResolve = [];
+    for (const message of messages) {
+        if (typeof message.files === 'string') {
+            try {
+                const ids = JSON.parse(message.files);
+                if (Array.isArray(ids) && ids.length > 0) {
+                    messagesToResolve.push({ message, ids });
+                    ids.forEach((id) => fileIdSet.add(id));
+                }
+                else {
+                    message.files = undefined;
+                }
+            }
+            catch {
+                message.files = undefined;
+            }
+        }
+    }
+    if (fileIdSet.size === 0)
+        return;
+    const { getFileMeta } = await import('@/services/api');
+    const metaMap = new Map();
+    const results = await Promise.allSettled([...fileIdSet].map(async (id) => {
+        const meta = await getFileMeta(id);
+        return { id, meta };
+    }));
+    for (const result of results) {
+        if (result.status === 'fulfilled') {
+            const { id, meta } = result.value;
+            metaMap.set(id, {
+                name: meta.originalName,
+                size: meta.size,
+                isImage: meta.mimeType.startsWith('image/'),
+            });
+        }
+    }
+    for (const { message, ids } of messagesToResolve) {
+        message.files = ids
+            .map((id) => {
+            const meta = metaMap.get(id);
+            if (!meta)
+                return null;
+            return {
+                name: meta.name,
+                size: meta.size,
+                previewUrl: null,
+                isImage: meta.isImage,
+            };
+        })
+            .filter((item) => item !== null);
+    }
+}
 export const useConversationStore = defineStore('conversation', () => {
     // ============================================================
     // State
@@ -105,8 +166,10 @@ export const useConversationStore = defineStore('conversation', () => {
         }
         catch { /* 存储满或私有模式下忽略 */ }
     }
-    // 初始化时恢复数据
+    // 初始化时恢复本地数据
     hydrate();
+    // 如果有 token，从后端同步最新会话列表（异步，不阻塞渲染）
+    syncFromBackend();
     // 自动持久化
     watch(sessions, persist, { deep: true });
     watch(currentId, persist);
@@ -135,6 +198,11 @@ export const useConversationStore = defineStore('conversation', () => {
     }
     /** 删除指定会话 */
     function deleteSession(id) {
+        // 异步同步后端（fire-and-forget，不阻塞本地操作）
+        import('@/services/api').then(({ deleteConversation }) => {
+            deleteConversation(id).catch(() => { });
+        });
+        // 本地立即删除
         sessions.value = sessions.value.filter((s) => s.id !== id);
         delete messagesCache.value[id];
         if (currentId.value === id) {
@@ -143,10 +211,43 @@ export const useConversationStore = defineStore('conversation', () => {
     }
     /** 修改会话标题 */
     function updateTitle(id, title) {
+        // 本地乐观更新
         const session = sessions.value.find((s) => s.id === id);
         if (session) {
             session.title = title;
             session.updatedAt = Date.now();
+        }
+        // 异步同步后端（fire-and-forget）
+        import('@/services/api').then(({ updateConversation }) => {
+            updateConversation(id, title).catch(() => { });
+        });
+    }
+    /** 用后端数据替换本地会话列表（登录后同步） */
+    function replaceSessions(list) {
+        sessions.value = list;
+        // 清除旧用户的消息缓存
+        messagesCache.value = {};
+        // 如果当前选中的会话不在新列表中，重置
+        if (currentId.value && !list.some((s) => s.id === currentId.value)) {
+            currentId.value = list.length > 0 ? list[0].id : null;
+        }
+        // 若没有当前会话，默认选中第一条
+        if (!currentId.value && list.length > 0) {
+            currentId.value = list[0].id;
+        }
+    }
+    /** 应用启动时从后端拉取最新会话列表，清洗掉本地脏数据（后端不可用时保留本地数据） */
+    async function syncFromBackend() {
+        const token = localStorage.getItem('ai-chat-token');
+        if (!token)
+            return;
+        try {
+            const { getConversations } = await import('@/services/api');
+            const backendSessions = await getConversations();
+            replaceSessions(backendSessions);
+        }
+        catch {
+            // 后端不可用，保留本地数据
         }
     }
     /** 切换到指定会话 */
@@ -166,6 +267,7 @@ export const useConversationStore = defineStore('conversation', () => {
         try {
             const { getMessages } = await import('@/services/api');
             const res = await getMessages(id, undefined, PAGE_SIZE);
+            await resolveMessageFiles(res.messages);
             const existingMessages = messagesCache.value[id]?.messages ?? [];
             const mergedMessages = [...res.messages];
             for (const message of existingMessages) {
@@ -208,6 +310,7 @@ export const useConversationStore = defineStore('conversation', () => {
         try {
             const { getMessages } = await import('@/services/api');
             const res = await getMessages(id, cache.cursor, PAGE_SIZE);
+            await resolveMessageFiles(res.messages);
             // 将更早的消息插入到数组头部（保持正序：旧→新）
             cache.messages.unshift(...res.messages);
             cache.hasMore = res.hasMore;
@@ -323,6 +426,8 @@ export const useConversationStore = defineStore('conversation', () => {
         hydrate,
         persist,
         // 会话管理
+        replaceSessions,
+        syncFromBackend,
         createSession,
         deleteSession,
         updateTitle,

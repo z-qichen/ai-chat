@@ -12,16 +12,13 @@
 import { Readable } from 'node:stream'
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { authGuard } from '../middlewares/auth.ts'
-import { chatStream } from '../services/deepseek.ts'
+import { chatStream, chat } from '../services/deepseek.ts'
 import { createMessage, updateMessage, listAllMessages } from '../services/message.ts'
 import { getConversationByUser, createConversation, updateConversation } from '../services/conversation.ts'
 import { buildMessages } from '../services/chat.ts'
-import { getMemoryTool, handleExtractToolCalls, injectMemoriesIntoSystemPrompt } from '../services/memory.ts'
+import { getMemoryTool, handleExtractToolCalls } from '../services/memory.ts'
 import { logger } from '../logger.ts'
 import type { StreamRequestWithFiles, StreamChunk } from '../types/index.ts'
-
-/** 记忆提取最大轮次，防止无限循环 */
-const MAX_MEMORY_ROUNDS = 2
 
 const activeStreams = new Map<string, AbortController>()
 
@@ -78,15 +75,14 @@ export default async function chatRoutes(app: FastifyInstance) {
 
       const controller = new AbortController()
       activeStreams.set(id, controller)
-      // 使用 setImmediate 延迟注册，避免 Fastify reply.send() 内部触发的 close 事件误杀
       setImmediate(() => {
         if (!controller.signal.aborted) {
           request.raw.on('close', () => controller.abort())
         }
       })
 
-      let fullContent = ''
-      let fullReasoningContent = ''
+      const acc = { fullContent: '', fullReasoningContent: '' }
+      let memoriesAdded = 0
 
       logger.separator()
       logger.request('POST /chat/stream', {
@@ -97,75 +93,75 @@ export default async function chatRoutes(app: FastifyInstance) {
       })
 
       try {
-        const memoryTool = getMemoryTool()
+        const messages = await buildMessages({ conversationId: id, userId })
 
-        logger.info('开始调用 streamWithMemoryExtraction', { maxRounds: MAX_MEMORY_ROUNDS })
-        const result = await streamWithMemoryExtraction({
-          conversationId: id,
-          userId,
+        const deepseekStream = chatStream({
+          messages,
           model,
           signal: controller.signal,
           thinking,
-          memoryTool,
-          maxRounds: MAX_MEMORY_ROUNDS,
-        })
-        logger.info('streamWithMemoryExtraction 完成', {
-          chunkCount: result.chunks.length,
-          memoriesAdded: result.memoriesAdded,
         })
 
-        for (const chunk of result.chunks) {
+        for await (const chunk of deepseekStream) {
           if (chunk.content) {
             if (chunk.type === 'thinking') {
-              fullReasoningContent += chunk.content
-            } else if (chunk.type === 'answer') {
-              fullContent += chunk.content
+              acc.fullReasoningContent += chunk.content
+            } else {
+              acc.fullContent += chunk.content
             }
           }
           logger.chunk(chunk.content || '(空)', chunk.type)
           stream.push(`data: ${JSON.stringify(chunk)}\n\n`)
         }
 
-        if (result.memoriesAdded > 0) {
-          const notification: StreamChunk = {
-            content: '',
-            done: false,
-            type: 'memories_added',
-            memoriesAdded: result.memoriesAdded,
-          }
-          stream.push(`data: ${JSON.stringify(notification)}\n\n`)
-        }
-
         createMessage({
           conversationId: id,
           role: 'assistant',
-          content: fullContent,
+          content: acc.fullContent,
           timestamp: Date.now(),
-          reasoningContent: fullReasoningContent || null,
+          reasoningContent: acc.fullReasoningContent || null,
         })
 
         updateConversation(id, {})
+
+        memoriesAdded = await processMemoriesInBackground({
+          conversationId: id,
+          userId,
+          baseSystemPrompt: '你是一个有用的AI助手。',
+        })
+
         logger.end('POST /chat/stream 完成', {
-          answerLength: fullContent.length,
-          reasoningLength: fullReasoningContent.length,
+          answerLength: acc.fullContent.length,
+          reasoningLength: acc.fullReasoningContent.length,
+          memoriesAdded,
         })
       } catch (error: any) {
         logger.error('POST /chat/stream 出错', error)
-        if (controller.signal.aborted && fullContent) {
-          logger.info('中断但有部分内容，保存 partial', { partialLength: fullContent.length })
+        if (controller.signal.aborted && acc.fullContent) {
+          logger.info('中断但有部分内容，保存 partial', { partialLength: acc.fullContent.length })
           createMessage({
             conversationId: id,
             role: 'assistant',
-            content: fullContent,
+            content: acc.fullContent,
             timestamp: Date.now(),
             partial: true,
-            reasoningContent: fullReasoningContent || null,
+            reasoningContent: acc.fullReasoningContent || null,
           })
           stream.push(`data: ${JSON.stringify({ content: '', done: true, aborted: true })}\n\n`)
         } else if (!controller.signal.aborted) {
           stream.push(`data: ${JSON.stringify({ error: error.message || '未知错误' })}\n\n`)
         }
       } finally {
+        if (memoriesAdded > 0) {
+          const notification: StreamChunk = {
+            content: '',
+            done: false,
+            type: 'memories_added',
+            memoriesAdded,
+          }
+          stream.push(`data: ${JSON.stringify(notification)}\n\n`)
+        }
+
         if (activeStreams.get(id) === controller) {
           activeStreams.delete(id)
         }
@@ -275,92 +271,21 @@ export default async function chatRoutes(app: FastifyInstance) {
   )
 }
 
-/**
- * 带记忆提取的流式对话
- *
- * 最多进行 maxRounds 轮 tool calling：
- * - 每轮先流式调用 LLM（带 extract_user_info 工具）
- * - 如果 LLM 返回 tool_calls，则写入记忆、更新消息列表、进入下一轮
- * - 最后一轮或无需工具调用时，返回最终 chunks
- */
-async function streamWithMemoryExtraction(params: {
+async function processMemoriesInBackground(params: {
   conversationId: string
   userId: string
-  model: string
-  signal: AbortSignal
-  thinking?: { type: 'enabled' | 'disabled' }
-  memoryTool: ReturnType<typeof getMemoryTool>
-  maxRounds: number
-}): Promise<{ chunks: StreamChunk[]; memoriesAdded: number }> {
-  const { conversationId, userId, model, signal, thinking, memoryTool, maxRounds } = params
-  const baseSystemPrompt = '你是一个有用的AI助手。'
-  let messages = await buildMessages({ conversationId, userId, systemPrompt: baseSystemPrompt })
-  let totalMemoriesAdded = 0
-
-  for (let round = 0; round < maxRounds; round++) {
-    const isLastRound = round === maxRounds - 1
-    const tools = isLastRound ? [] : [memoryTool]
-
-    logger.info(`记忆提取轮次 ${round + 1}/${maxRounds}`, { isLastRound, hasTools: tools.length > 0 })
-
-    const deepseekStream = chatStream({ messages, model, signal, thinking, tools })
-    const chunks: StreamChunk[] = []
-    let toolCalls: StreamChunk['toolCalls'] | undefined
-
-    for await (const chunk of deepseekStream) {
-      if (chunk.toolCalls?.length) {
-        toolCalls = chunk.toolCalls
-      } else {
-        chunks.push(chunk)
-      }
+  baseSystemPrompt: string
+}): Promise<number> {
+  const { conversationId, userId, baseSystemPrompt } = params
+  try {
+    const messages = await buildMessages({ conversationId, userId, systemPrompt: baseSystemPrompt })
+    const memoryTool = getMemoryTool()
+    const result = await chat({ messages, model: 'deepseek-chat', tools: [memoryTool] })
+    if (result.toolCalls.length > 0) {
+      return handleExtractToolCalls(result.toolCalls, userId)
     }
-
-    if (!toolCalls) {
-      logger.info(`轮次 ${round + 1} 无工具调用，返回 ${chunks.length} 个chunk`)
-      return { chunks, memoriesAdded: totalMemoriesAdded }
-    }
-
-    // 处理 tool_calls，写入记忆
-    logger.info(`轮次 ${round + 1} 收到 ${toolCalls.length} 个工具调用`)
-    const count = handleExtractToolCalls(toolCalls, userId)
-    totalMemoriesAdded += count
-    logger.info(`已写入 ${count} 条记忆（累计 ${totalMemoriesAdded}）`)
-
-    if (count === 0) {
-      return { chunks, memoriesAdded: totalMemoriesAdded }
-    }
-
-    // 将 tool_calls 和结果追加到消息列表
-    messages.push({
-      role: 'assistant',
-      content: null,
-      tool_calls: toolCalls.map(tc => ({
-        id: tc.id,
-        type: 'function' as const,
-        function: tc.function,
-      })),
-    })
-
-    for (const tc of toolCalls) {
-      messages.push({
-        role: 'tool',
-        content: '已记录',
-        tool_call_id: tc.id,
-      })
-    }
-
-    // 刷新 system prompt 中的记忆
-    messages[0].content = injectMemoriesIntoSystemPrompt(userId, baseSystemPrompt)
+  } catch {
+    // 后台提取失败静默处理
   }
-
-  // 最后一轮：不带 tools 的纯流式回复
-  logger.info('进入最终轮次：不带工具的纯流式回复')
-  const finalStream = chatStream({ messages, model, signal, thinking, tools: [] })
-  const chunks: StreamChunk[] = []
-  for await (const chunk of finalStream) {
-    chunks.push(chunk)
-  }
-  logger.info(`最终轮次完成，返回 ${chunks.length} 个chunk`)
-
-  return { chunks, memoriesAdded: totalMemoriesAdded }
+  return 0
 }

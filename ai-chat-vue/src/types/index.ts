@@ -75,10 +75,14 @@ export interface StreamChunk {
   content: string
   /** 流是否已结束（true 表示服务端完成响应） */
   done: boolean
-  /** 内容类型：thinking=思考过程，answer=最终回答 */
-  type?: 'thinking' | 'answer'
+  /** 内容类型：thinking=思考过程，answer=最终回答，memories_added=记忆已添加 */
+  type?: 'thinking' | 'answer' | 'memories_added'
   /** 是否被用户中止 */
   aborted?: boolean
+  /** 工具调用列表 */
+  toolCalls?: Array<{ id: string; function: { name: string; arguments: string } }>
+  /** 本次新增的记忆条数 */
+  memoriesAdded?: number
 }
 
 /** 文件上传 API 响应 */
@@ -112,4 +116,26 @@ export interface AuthResponse {
     createdAt: number
     updatedAt: number
   }>
+}
+
+/** 用户记忆条目 */
+export interface MemoryItem {
+  id: string
+  userId: string
+  category: 'identity' | 'address' | 'preference' | 'background' | 'other'
+  key: string
+  value: string
+  confidence: number
+  source: 'auto' | 'manual'
+  createdAt: number
+  updatedAt: number
+}
+
+/** 记忆分类中文标签映射 */
+export const MEMORY_CATEGORY_LABELS: Record<MemoryItem['category'], string> = {
+  identity: '身份',
+  address: '住址',
+  preference: '偏好',
+  background: '背景',
+  other: '其他',
 }

@@ -24,6 +24,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
+import { Document } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 
@@ -351,7 +352,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 底部操作区：主题切换 + 用户信息 -->
+    <!-- 底部操作区：主题切换 + 导航 + 用户信息 -->
     <div class="sidebar-footer">
       <button class="sidebar-footer__theme-btn" @click.stop="theme.toggle()" :title="theme.isDark ? '切换到亮色模式' : '切换到暗色模式'">
         <svg v-if="theme.isDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -368,6 +369,10 @@ onUnmounted(() => {
         <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
+      </button>
+
+      <button class="sidebar-footer__nav-btn" title="用户档案" @click="router.push('/memory')">
+        <el-icon :size="16"><Document /></el-icon>
       </button>
 
       <div class="sidebar-user" @click.stop="toggleUserMenu">
@@ -678,6 +683,26 @@ onUnmounted(() => {
   justify-content: center;
   width: 2.25rem;
   height: 2.25rem;
+  border-radius: 0.5rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+
+  &:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-secondary);
+  }
+}
+
+.sidebar-footer__nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  background: transparent;
   border-radius: 0.5rem;
   color: var(--text-muted);
   cursor: pointer;

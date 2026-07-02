@@ -73,10 +73,10 @@ export default async function conversationRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string }
     const userId = (request as any).user.userId
 
-    const conversation = getConversationByUser(id, userId)
+    let conversation = getConversationByUser(id, userId)
     if (!conversation) {
-      reply.code(404)
-      return { error: '会话不存在' }
+      // 前端可能持有本地生成的会话 ID（未通过后端创建），自动创建
+      conversation = createConversation(userId, '新对话', 'deepseek-chat', id)
     }
 
     return { data: conversation }

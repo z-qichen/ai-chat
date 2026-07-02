@@ -6,12 +6,10 @@
  *   - 消息分页加载（游标分页，优先返回最新消息）
  *   - 消息新增与 SSE 流式回复
  *
- * 注：目前后端尚未部署，API 调用会失败。当前前端以本地模式运行，
- *     会话元数据存 localStorage，消息缓存在 Pinia 内存中。
- *     后端就绪后，取消注释各方法内的 fetch 调用即可接入。
+ * 注：后端不可用时自动降级为本地模式，不影响前端正常使用。
  */
 
-import type { SessionMeta, Message, StreamChunk, AuthResponse, UploadFileResponse, FileMeta } from '@/types'
+import type { SessionMeta, Message, StreamChunk, AuthResponse, UploadFileResponse, FileMeta, MemoryItem } from '@/types'
 
 /** 后端 API 基础地址 */
 const BASE = 'http://localhost:4000/api'
@@ -71,17 +69,55 @@ export function login(username: string, password: string): Promise<AuthResponse>
 
 // ---- 会话 API ----
 
+/** 后端会话分页响应包装 */
+interface ConversationsListResponse {
+  data: Array<{
+    id: string
+    userId: string
+    title: string
+    model: string
+    createdAt: number
+    updatedAt: number
+  }>
+  nextCursor: string | null
+  hasMore: boolean
+}
+
+/** 后端单会话响应包装 */
+interface ConversationDetailResponse {
+  data: {
+    id: string
+    userId: string
+    title: string
+    model: string
+    createdAt: number
+    updatedAt: number
+  }
+}
+
+/** 后端 Conversation → 前端 SessionMeta 映射 */
+function toSessionMeta(c: ConversationsListResponse['data'][number]): SessionMeta {
+  return {
+    id: c.id,
+    title: c.title,
+    updatedAt: c.updatedAt,
+    messageCount: 0,
+  }
+}
+
 /** 获取所有会话元数据列表（用于侧边栏同步） */
-export function getConversations(): Promise<SessionMeta[]> {
-  return request('/conversations')
+export async function getConversations(): Promise<SessionMeta[]> {
+  const res = await request<ConversationsListResponse>('/conversations')
+  return (res.data || []).map(toSessionMeta)
 }
 
 /** 创建新会话 */
-export function createConversation(title: string): Promise<SessionMeta> {
-  return request('/conversations', {
+export async function createConversation(title: string): Promise<SessionMeta> {
+  const res = await request<ConversationDetailResponse>('/conversations', {
     method: 'POST',
     body: JSON.stringify({ title }),
   })
+  return toSessionMeta(res.data)
 }
 
 /** 更新会话标题 */
@@ -371,4 +407,24 @@ export function uploadFile(file: File): Promise<UploadFileResponse> {
 /** 查询文件元数据 */
 export function getFileMeta(fileId: string): Promise<FileMeta> {
   return request<FileMeta>(`/files/${fileId}`)
+}
+
+// ---- 记忆 API ----
+
+/** 获取当前用户所有记忆 */
+export function fetchMemories(): Promise<MemoryItem[]> {
+  return request<MemoryItem[]>('/memories')
+}
+
+/** 创建一条记忆 */
+export function createMemory(data: { category: string; key: string; value: string }): Promise<MemoryItem> {
+  return request<MemoryItem>('/memories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+/** 删除一条记忆 */
+export function deleteMemory(id: string): Promise<void> {
+  return request(`/memories/${id}`, { method: 'DELETE' })
 }

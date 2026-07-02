@@ -55,6 +55,7 @@ pnpm dev
 - 用户注册 / 登录（JWT 认证）
 - 全局暗色 / 亮色主题
 - 模型切换与校验
+- 跨标签记忆：自动沉淀用户关键信息（身份/住址/喜好等），对话中智能注入
 
 ## API 概览
 
@@ -72,5 +73,8 @@ pnpm dev
 | POST | `/api/files/upload` | JWT | 文件上传 |
 | GET | `/api/files/:id` | JWT | 文件元数据 |
 | POST | `/api/models/validate` | — | 模型校验 |
+| GET | `/api/memories` | JWT | 记忆列表 |
+| POST | `/api/memories` | JWT | 新增记忆 |
+| DELETE | `/api/memories/:id` | JWT | 删除记忆 |
 | GET | `/api/health` | — | 健康检查 |
 

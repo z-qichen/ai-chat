@@ -10,6 +10,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Chat</title>
+  <!--
+    内联主题脚本：在 HTML 解析的第一时间设置 dark class，消除页面加载时的主题闪烁。
+    必须在任何 CSS 加载前执行，确保浏览器首次绘制时变量已正确。
+    逻辑与 src/stores/theme.ts 的 init() 保持一致。
+  -->
+  <script>
+    (function() {
+      var theme = localStorage.getItem('ai-chat-theme')
+      if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark')
+      }
+    })()
+  </script>
 </head>
 <body>
   <!-- Vue 应用挂载点 -->
