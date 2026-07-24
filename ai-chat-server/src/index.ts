@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/index.ts —— 服务入口
  *
  * 创建 Fastify 实例，注册所有插件与路由，启动 HTTP 服务。
@@ -6,12 +6,12 @@
  * 启动命令：pnpm dev（开发模式热重载）
  */
 import Fastify from 'fastify'
-import corsPlugin from './plugins/cors.ts'
-import jwtPlugin from './plugins/jwt.ts'
-import rateLimitPlugin from './plugins/rateLimit.ts'
+import corsPlugin from './plugins/cors'
+import jwtPlugin from './plugins/jwt'
+import rateLimitPlugin from './plugins/rateLimit'
 import multipartPlugin from '@fastify/multipart'
-import routes from './routes/index.ts'
-import { config } from './config.ts'
+import routes from './routes/index'
+import { config } from './config'
 
 const app = Fastify({
   logger: {

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/routes/conversations.ts —— 会话 CRUD 路由
  *
  * 所有路由需要 JWT 认证。
@@ -10,24 +10,24 @@
  * DELETE /api/conversations/:id      — 删除会话及其所有消息
  */
 import type { FastifyInstance } from 'fastify'
-import { authGuard } from '../middlewares/auth.ts'
+import { authGuard } from '../middlewares/auth'
 import type {
   CreateConversationBody,
   UpdateConversationBody,
   PaginationQuery,
-} from '../types/index.ts'
+} from '../types/index'
 import {
   listConversations,
   createConversation,
   getConversationByUser,
   updateConversation,
   deleteConversation,
-} from '../services/conversation.ts'
+} from '../services/conversation'
 import {
   createConversationSchema,
   updateConversationSchema,
   paginationSchema,
-} from '../schemas/conversation.ts'
+} from '../schemas/conversation'
 
 export default async function conversationRoutes(app: FastifyInstance) {
   app.addHook('onRequest', authGuard)

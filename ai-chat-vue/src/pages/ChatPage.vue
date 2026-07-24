@@ -1,17 +1,22 @@
 <!--
-  ChatPage.vue —— 对话主页面
+  ChatPage.vue —— 应用布局壳
 
   结构：
-    - 左侧：可折叠侧边栏（Sidebar），显示会话列表
-    - 右侧：聊天主区域（ChatArea），包含消息列表 + 输入框
+    - 左侧：可折叠侧边栏（Sidebar），始终保留，显示会话列表
+    - 右侧：<router-view />，根据子路由动态切换内容：
+        /              → ChatArea（新对话 / 空态）
+        /chat/:id      → ChatArea（指定会话）
+        /task          → TaskPage（定时任务）
+        /plugins       → PluginsPage（插件）
+        /memory        → MemoryPage（档案管理）
 
   布局：flex 横向排列，侧边栏通过动画切换显隐（宽度 300px ↔ 0）
-  通信方式：父组件通过 props 向下传递数据，子组件通过 emit 向上通知事件
+  路由策略：会话操作（新建/切换/删除）同步驱动路由变化，路由变化也反向同步 store
 -->
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, provide, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import Sidebar from '@/components/Sidebar.vue'
-import ChatArea from '@/components/ChatArea.vue'
 import { useConversationStore } from '@/stores/conversation'
 
 /** 768px 移动端断点 */
@@ -19,6 +24,8 @@ const MOBILE_BREAKPOINT = 768
 
 /** 会话 Store 实例 */
 const store = useConversationStore()
+const router = useRouter()
+const route = useRoute()
 
 /** 侧边栏是否可见，桌面端默认展开，移动端默认隐藏 */
 const isSidebarVisible = ref(true)
@@ -28,10 +35,14 @@ function initSidebarState() {
   isSidebarVisible.value = window.innerWidth >= MOBILE_BREAKPOINT
 }
 
-onMounted(() => {
+onMounted(async () => {
   initSidebarState()
-  store.syncFromBackend()
+  await store.syncFromBackend()
   window.addEventListener('resize', initSidebarState)
+  // 同步完成后若已有当前会话且 URL 不是会话路由，跳转到对应会话
+  if (store.currentId && route.name !== 'chat-session') {
+    router.replace({ name: 'chat-session', params: { id: store.currentId } })
+  }
 })
 
 onUnmounted(() => {
@@ -51,11 +62,13 @@ const onToggleSidebar = () => {
 /** 新建会话（点击侧边栏"新建"按钮时） */
 const onNewChat = () => {
   store.createSession()
+  router.push({ name: 'chat-session', params: { id: store.currentId } })
 }
 
 /** 选中侧边栏某个会话 */
 const onSelectSession = (id: string) => {
   store.selectSession(id)
+  router.push({ name: 'chat-session', params: { id } })
 }
 
 /** 编辑会话标题（侧边栏内联编辑确认后） */
@@ -66,7 +79,26 @@ const onUpdateTitle = (id: string, title: string) => {
 /** 删除会话（侧边栏确认删除后） */
 const onDeleteSession = (id: string) => {
   store.deleteSession(id)
+  if (store.currentId) {
+    router.push({ name: 'chat-session', params: { id: store.currentId } })
+  } else {
+    router.push({ name: 'chat-new' })
+  }
 }
+
+/** 向子路由组件注入侧边栏状态与方法 */
+provide('sidebarVisible', isSidebarVisible)
+provide('toggleSidebar', onToggleSidebar)
+
+/** 监听路由参数变化：直接 URL 导航（书签/前进后退）时同步 store 中的当前会话 */
+watch(
+  () => route.params.id,
+  (id) => {
+    if (id && id !== store.currentId) {
+      store.selectSession(id as string)
+    }
+  }
+)
 </script>
 
 <template>
@@ -81,15 +113,16 @@ const onDeleteSession = (id: string) => {
         @select-session="onSelectSession"
         @update-title="onUpdateTitle"
         @delete-session="onDeleteSession"
+        @load-more-sessions="store.loadMoreSessions"
       />
     </div>
 
     <!-- 移动端抽屉遮罩层 -->
     <div class="chat-page__backdrop" @click="onToggleSidebar"></div>
 
-    <!-- 主聊天区域 -->
+    <!-- 右侧内容区：根据子路由动态切换 -->
     <div class="chat-page__main">
-      <ChatArea :sidebar-visible="isSidebarVisible" @toggle-sidebar="onToggleSidebar" />
+      <router-view />
     </div>
   </div>
 </template>

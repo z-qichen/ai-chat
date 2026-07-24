@@ -11,17 +11,15 @@
     - 通过 `hasMessages` 切换 empty / has-content 两种布局模式
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject, type Ref } from 'vue'
 import { useConversationStore } from '@/stores/conversation'
 import MessageList from './MessageList.vue'
 import ChatInput from './ChatInput.vue'
 import ModelSelector from './ModelSelector.vue'
 
-/** 父组件传入的侧边栏可见状态 */
-defineProps<{ sidebarVisible: boolean }>()
-
-/** 对外通知：请求切换侧边栏 */
-const emit = defineEmits<{ 'toggle-sidebar': [] }>()
+/** 从父布局 ChatPage 注入侧边栏状态 */
+const sidebarVisible = inject<Ref<boolean>>('sidebarVisible')!
+const toggleSidebar = inject<() => void>('toggleSidebar')!
 
 const chatStore = useConversationStore()
 
@@ -36,7 +34,7 @@ const hasMessages = computed(() => {
     <!-- 顶部导航栏 -->
     <div class="chat-area__top">
       <!-- 侧边栏折叠时才显示展开按钮 -->
-      <button v-if="!sidebarVisible" class="chat-area__toggle-btn" @click="emit('toggle-sidebar')">
+      <button v-if="!sidebarVisible" class="chat-area__toggle-btn" @click="toggleSidebar">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
           <line x1="9" y1="3" x2="9" y2="21"/>

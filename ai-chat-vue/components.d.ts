@@ -18,12 +18,14 @@ declare module 'vue' {
     ElFormItem: typeof import('element-plus/es')['ElFormItem']
     ElIcon: typeof import('element-plus/es')['ElIcon']
     ElInput: typeof import('element-plus/es')['ElInput']
+    HistoryCard: typeof import('./src/components/historyCard.vue')['default']
     MarkdownRenderer: typeof import('./src/components/MarkdownRenderer.vue')['default']
     MessageItem: typeof import('./src/components/MessageItem.vue')['default']
     MessageList: typeof import('./src/components/MessageList.vue')['default']
     ModelSelector: typeof import('./src/components/ModelSelector.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SearchInput: typeof import('./src/components/SearchInput.vue')['default']
     Sidebar: typeof import('./src/components/Sidebar.vue')['default']
   }
 }

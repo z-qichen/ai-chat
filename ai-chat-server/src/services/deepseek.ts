@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/services/deepseek.ts —— DeepSeek API 代理服务
  *
  * 封装对 DeepSeek API 的调用，支持：
@@ -8,9 +8,9 @@
  * 通过后端代理调用，避免前端暴露 API Key。
  */
 import OpenAI from 'openai'
-import { config } from '../config.ts'
-import { logger } from '../logger.ts'
-import type { StreamChunk, ContentPart, ThinkingConfig } from '../types/index.ts'
+import { config } from '../config'
+import { logger } from '../logger'
+import type { StreamChunk, ContentPart, ThinkingConfig } from '../types/index'
 
 const client = new OpenAI({
   apiKey: config.deepseek.apiKey,

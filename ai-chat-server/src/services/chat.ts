@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/services/chat.ts —— 聊天消息构建服务
  *
  * 从数据库消息历史 + 文件内容构建 OpenAI 格式的消息数组。
@@ -6,10 +6,10 @@
  *
  * 可被 chat/stream 路由及其他需要构建消息的地方复用。
  */
-import { listAllMessages } from './message.ts'
-import { processFile } from './file.ts'
-import { injectMemoriesIntoSystemPrompt } from './memory.ts'
-import type { Message, ContentPart } from '../types/index.ts'
+import { listAllMessages } from './message'
+import { processFile } from './file'
+import { injectMemoriesIntoSystemPrompt } from './memory'
+import type { Message, ContentPart } from '../types/index'
 
 export interface BuildMessagesOptions {
   conversationId: string

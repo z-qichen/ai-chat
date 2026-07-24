@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/routes/auth.ts —— 认证相关路由
  *
  * POST /api/auth/register — 用户注册
@@ -16,10 +16,10 @@
  *   5. 返回 token + user + conversations
  */
 import type { FastifyInstance } from 'fastify'
-import { createUser, verifyLogin as verifyUserLogin, findUserByUsername } from '../services/user.ts'
-import { listConversations } from '../services/conversation.ts'
-import { registerSchema, loginSchema } from '../schemas/auth.ts'
-import type { AuthResponse } from '../types/index.ts'
+import { createUser, verifyLogin as verifyUserLogin, findUserByUsername } from '../services/user'
+import { listConversations } from '../services/conversation'
+import { registerSchema, loginSchema } from '../schemas/auth'
+import type { AuthResponse } from '../types/index'
 
 export default async function authRoutes(app: FastifyInstance) {
   /**

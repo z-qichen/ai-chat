@@ -39,6 +39,7 @@ const emit = defineEmits<{
   'new-chat': []
   'update-title': [id: string, title: string]
   'delete-session': [id: string]
+  'load-more-sessions': []
 }>()
 
 // ---- 本地接口（轻量，只含展示需要的字段） ----
@@ -63,6 +64,13 @@ const userMenuOpen = ref(false)
 
 function toggleUserMenu() {
   userMenuOpen.value = !userMenuOpen.value
+}
+
+/** 会话列表是否展开 */
+const chatListVisible = ref(true)
+
+function toggleChatList() {
+  chatListVisible.value = !chatListVisible.value
 }
 
 // ---- 虚拟滚动相关 ----
@@ -98,10 +106,15 @@ const visibleItems = computed(() => {
 /** 可视区内容的 Y 轴偏移量 */
 const offsetY = computed(() => visibleRange.value.start * ITEM_HEIGHT)
 
-/** 滚动事件：更新 scrollTop */
+/** 滚动事件：更新 scrollTop，检测是否接近底部触发加载更多 */
+const LOAD_MORE_THRESHOLD = 200
 function onScroll() {
   if (scrollContainer.value) {
     scrollTop.value = scrollContainer.value.scrollTop
+    const { scrollTop: st, scrollHeight, clientHeight } = scrollContainer.value
+    if (scrollHeight - st - clientHeight < LOAD_MORE_THRESHOLD) {
+      emit('load-more-sessions')
+    }
   }
 }
 
@@ -240,6 +253,10 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
+
+/** 路由跳转 */
+
+
 </script>
 
 <template>
@@ -266,9 +283,22 @@ onUnmounted(() => {
         <kbd>Ctrl+K</kbd>
       </button>
     </div>
-
-    <!-- 会话列表区域（虚拟滚动） -->
+   <!-- 任务分组 -->
+    <div class="chatList-container">
+      <div class="chatList-container-bread">
+        <div class="chatList-container-bread__left" @click="toggleChatList">
+          <span class="chatList-container-bread__arrow" :class="{ 'chatList-container-bread__arrow--open': chatListVisible }">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </span>
+          <span>对话</span>
+        </div>
+        <div class="chatList-container-bread__right" @click="router.push({ name: 'history' })">查看全部</div>
+      </div>
+      <!-- 会话列表区域（虚拟滚动） -->
     <div
+      v-show="chatListVisible"
       ref="scrollContainer"
       class="sidebar-scroll"
       @scroll="onScroll"
@@ -351,7 +381,22 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-
+    </div>
+    <!-- 定时任务按钮 -->
+    <button class="sidebar-header__new-chat" @click="router.push('/task')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      <span>定时任务</span>
+    </button>
+    <!-- 插件按钮 -->
+    <button class="sidebar-header__new-chat" @click="router.push('/plugins')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 12h-4v-2a2 2 0 0 0-2-2h-2V4a2 2 0 0 0-4 0v4H8a2 2 0 0 0-2 2v2H2v2a2 2 0 0 0 2 2h2v2a2 2 0 0 0 2 2h2v-4a2 2 0 0 1 4 0v4h2a2 2 0 0 0 2-2v-2h4z"/>
+      </svg>
+      <span>插件</span>
+    </button>
     <!-- 底部操作区：主题切换 + 导航 + 用户信息 -->
     <div class="sidebar-footer">
       <button class="sidebar-footer__theme-btn" @click.stop="theme.toggle()" :title="theme.isDark ? '切换到亮色模式' : '切换到暗色模式'">
@@ -480,6 +525,62 @@ onUnmounted(() => {
       color: var(--text-placeholder);
       background: var(--bg-alt);
       border-radius: 0.25rem;
+    }
+  }
+}
+
+/*任务分组 */
+.chatList-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chatList-container-bread{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  user-select: none;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+
+  &__left {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    cursor: pointer;
+    padding: 0.25rem 0.375rem;
+    margin: -0.25rem -0.375rem;
+    border-radius: 0.375rem;
+    transition: background-color 0.15s;
+
+    &:hover {
+      background-color: var(--bg-hover);
+    }
+  }
+
+  &__arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+
+    &--open {
+      transform: rotate(90deg);
+    }
+  }
+
+  &__right {
+    cursor: pointer;
+    color: var(--text-placeholder);
+    transition: color 0.15s;
+
+    &:hover {
+      color: var(--accent-primary);
     }
   }
 }

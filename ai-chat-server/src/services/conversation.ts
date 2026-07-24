@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/services/conversation.ts —— 会话业务逻辑
  *
  * 封装会话的数据库操作：
@@ -7,8 +7,8 @@
  * - 归属校验
  */
 import { randomUUID } from 'node:crypto'
-import db from '../database.ts'
-import type { Conversation } from '../types/index.ts'
+import db from '../database'
+import type { Conversation } from '../types/index'
 
 /**
  * 查询用户的会话列表（游标分页）

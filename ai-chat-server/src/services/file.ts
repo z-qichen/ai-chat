@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/services/file.ts —— 文件处理服务
  *
  * 统一的文件处理入口，支持：
@@ -11,9 +11,9 @@
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import db from '../database.ts'
-import { config } from '../config.ts'
-import type { UploadedFile } from '../types/index.ts'
+import db from '../database'
+import { config } from '../config'
+import type { UploadedFile } from '../types/index'
 
 const UPLOAD_DIR = path.resolve(config.upload.dir)
 

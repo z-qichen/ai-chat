@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/routes/messages.ts —— 消息路由
  *
  * 所有路由需要 JWT 认证。
@@ -7,10 +7,10 @@
  * POST   /api/conversations/:id/messages — 保存消息（简单插入，不触发 AI）
  */
 import type { FastifyInstance } from 'fastify'
-import { authGuard } from '../middlewares/auth.ts'
-import type { PaginationQuery, Message } from '../types/index.ts'
-import { listMessages, createMessage } from '../services/message.ts'
-import { getConversationByUser, createConversation, updateConversation } from '../services/conversation.ts'
+import { authGuard } from '../middlewares/auth'
+import type { PaginationQuery, Message } from '../types/index'
+import { listMessages, createMessage } from '../services/message'
+import { getConversationByUser, createConversation, updateConversation } from '../services/conversation'
 
 type SaveMessageBody = {
   role: 'user' | 'assistant' | 'system'

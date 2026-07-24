@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/routes/memory.ts —— 用户记忆管理路由
  *
  * GET    /api/memories          — 获取当前用户所有记忆
@@ -6,9 +6,9 @@
  * DELETE /api/memories/:id      — 删除指定记忆
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import { authGuard } from '../middlewares/auth.ts'
-import { listMemories, upsertMemory, deleteMemory } from '../services/memory.ts'
-import type { MemoryItem } from '../types/index.ts'
+import { authGuard } from '../middlewares/auth'
+import { listMemories, upsertMemory, deleteMemory } from '../services/memory'
+import type { MemoryItem } from '../types/index'
 
 const VALID_CATEGORIES = ['identity', 'address', 'preference', 'background', 'other'] as const
 

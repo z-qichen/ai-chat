@@ -20,7 +20,7 @@ npx vue-tsc --noEmit  # 类型检查
 
 ### 已完成
 - [x] 项目脚手架 (Vite + Vue 3 + TS + Less + Element Plus)
-- [x] 路由配置 (`/` ChatPage, `/memory` MemoryPage, `/settings` SettingsPage, `/login` LoginPage, `/:pathMatch(.*)*` 404)
+- [x] 路由配置 (`/` ChatPage, `/memory` MemoryPage, `/task` TaskPage, `/plugins` PluginsPage, `/settings` SettingsPage, `/login` LoginPage, `/:pathMatch(.*)*` 404)
 - [x] Pinia Store — `auth` (用户认证) + `config` (应用配置) + `conversation` (会话与消息)
 - [x] 类型定义 (Message / Conversation / AppConfig / StreamChunk / AttachedFile / User / AuthResponse)
 - [x] 全局样式 (CSS Reset + 滚动条美化)
@@ -49,6 +49,8 @@ npx vue-tsc --noEmit  # 类型检查
 
 ### 待完成
 - [ ] `pages/SettingsPage.vue` — API 配置页面 (目前为占位)
+- [ ] `pages/TaskPage.vue` — 定时任务页面 (目前为占位)
+- [ ] `pages/PluginsPage.vue` — 插件页面 (目前为占位)
 - [ ] `utils/stream.ts` — SSE 流式工具抽离 (当前逻辑在 services/chat.ts 内)
 - [ ] "停止生成" 按钮 (AbortController 已在 service 支持，UI 未接入)
 - [ ] "联网搜索" 功能 (按钮已绘制，未接线)
@@ -82,6 +84,8 @@ src/
 │   ├── ChatPage.vue            # 对话页面
 │   ├── LoginPage.vue           # 登录/注册页面
 │   ├── MemoryPage.vue          # 用户档案管理页
+│   ├── TaskPage.vue            # 定时任务页面 (占位)
+│   ├── PluginsPage.vue         # 插件页面 (占位)
 │   ├── SettingsPage.vue        # 设置页面 (占位)
 │   └── NotFoundPage.vue        # 404 页面 (暗色模式)
 ├── components/

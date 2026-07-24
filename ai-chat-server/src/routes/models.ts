@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/routes/models.ts —— 模型校验路由
  *
  * POST /api/models/validate —— 校验模型名称是否合法
@@ -9,8 +9,8 @@
  * 3. 若不在列表中，通过相似度匹配给出最近似的建议
  */
 import type { FastifyInstance } from 'fastify'
-import { config } from '../config.ts'
-import type { ValidateModelBody, ValidateModelResponse } from '../types/index.ts'
+import { config } from '../config'
+import type { ValidateModelBody, ValidateModelResponse } from '../types/index'
 
 /**
  * 计算两个字符串的编辑距离（Levenshtein Distance）

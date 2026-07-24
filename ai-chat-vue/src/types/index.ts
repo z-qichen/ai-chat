@@ -81,8 +81,10 @@ export interface StreamChunk {
   aborted?: boolean
   /** 工具调用列表 */
   toolCalls?: Array<{ id: string; function: { name: string; arguments: string } }>
-  /** 本次新增的记忆条数 */
+  /** 本次新增的记忆条�?*/
   memoriesAdded?: number
+  /** 流结束时后端持久化的 assistant 消息真实 ID（用于回填本地乐观消息 ID） */
+  messageId?: string
 }
 
 /** 文件上传 API 响应 */

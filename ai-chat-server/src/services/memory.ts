@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/services/memory.ts —— 用户记忆服务
  *
  * 提供用户记忆的增删查、系统提示词注入、以及 AI tool_call 结果处理。
@@ -7,9 +7,9 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import db from '../database.ts'
-import { logger } from '../logger.ts'
-import type { MemoryItem, ExtractMemoryArgs } from '../types/index.ts'
+import db from '../database'
+import { logger } from '../logger'
+import type { MemoryItem, ExtractMemoryArgs } from '../types/index'
 
 /** 记忆分类的中文标签映射 */
 const CATEGORY_LABELS: Record<MemoryItem['category'], string> = {

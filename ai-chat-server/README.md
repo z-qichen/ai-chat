@@ -37,9 +37,14 @@ pnpm run start            # 生产启动
 - [x] 跨标签记忆 — 自动提取用户关键信息（身份/住址/喜好等），注入 system prompt 实现个性化回复，含冲突裁决与上限管理
 
 ### 待完成
-- [ ] 错误处理中间件 (统一错误格式)
+- [ ] 错误处理中间件 (统一错误格式；SSE 接口单独捕获异常并以 `event: error` 推送后关闭连接)
 - [ ] 单元测试
 - [ ] Docker 部署支持
+- [ ] 合并用户消息保存到 chat/stream 接口 (先存 User Message → 调用 AI → 存 AI Message，保证单次请求原子性，消除"半截对话"风险)
+- [ ] 抽象 StorageService (开发用本地磁盘，生产通过环境变量切换云存储 S3/OSS/MinIO；解决 Docker 多实例文件不可达)
+- [ ] 图片 base64 编码缓存 (避免每次对话重新读盘编码；文档文本改为上传时提取并缓存 extracted_text)
+- [ ] 记忆写入原子化 (upsertMemory 改用 INSERT ON CONFLICT DO UPDATE，避免多实例并发写冲突)
+- [ ] 数据库选型评估 (面向多用户高并发时，评估从 better-sqlite3 同步 API 迁移到 PostgreSQL + 异步 I/O)
 ## 目录结构
 
 ```

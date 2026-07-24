@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/services/message.ts —— 消息业务逻辑
  *
  * 封装消息的数据库操作：
@@ -6,8 +6,8 @@
  * - 创建/追加消息
  */
 import { randomUUID } from 'node:crypto'
-import db from '../database.ts'
-import type { Message } from '../types/index.ts'
+import db from '../database'
+import type { Message } from '../types/index'
 
 export function listMessages(
   conversationId: string,

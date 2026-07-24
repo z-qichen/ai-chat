@@ -1,10 +1,10 @@
-/**
+﻿/**
  * src/schemas/conversation.ts —— 会话请求校验 Schema
  *
  * 使用 Zod 对会话的创建、更新、分页请求进行校验。
  */
 import { z } from 'zod'
-import { config } from '../config.ts'
+import { config } from '../config'
 
 /** 支持的模型枚举 */
 const modelEnum = z.enum(config.models as unknown as [string, ...string[]])

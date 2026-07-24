@@ -4,6 +4,39 @@
 
 ---
 
+## 〇、后端规范化（优先，对齐标准请求流程）
+
+### 0.1 全局错误处理
+
+- [ ] `index.ts` 注册 `app.setErrorHandler`，兜底所有未捕获异常
+- [ ] 区分错误类型：Zod 校验错误 → 400、业务错误 → 对应状态码、其余 → 500
+- [ ] 自定义 `AppError` 类（含 `code` / `statusCode` / `message`），Service 层抛出
+- [ ] 注册 `app.setNotFoundHandler`，统一 404 响应格式
+- [ ] 错误统一走响应格式，避免泄露堆栈到前端
+
+### 0.2 统一响应格式
+
+- [ ] 定义统一结构 `{ code, message, data }`
+- [ ] 封装 `success(data, message?)` / `fail(code, message)` 辅助函数
+- [ ] 各路由改用统一格式（`conversations` / `auth` / `messages` / `chat` / `files` / `memory` / `models`）
+- [ ] 前端 API 层同步适配新响应结构
+
+### 0.3 参数校验补全
+
+- [ ] 为路径参数 `:id` 增加 Zod 校验（UUID 格式）
+- [ ] 抽取通用 `idParamSchema`，覆盖所有含 `:id` 的路由
+- [ ] 统一校验失败响应走全局错误处理（配合 0.1）
+
+### 0.4 流式 tool_calls 排序修复（`deepseek.ts`）
+
+- [ ] 问题：`StreamAccumulator.toolCalls` 的 entry 未保存 `index`，流结束后按 `name`/`id` 字母序排序（`deepseek.ts:207`），多工具并行时最终顺序与模型意图顺序不一致
+- [ ] 修复：Map 的 value 结构中加入 `index` 字段，累积时一并写入（`deepseek.ts:169`）
+- [ ] 修复：结束后改为按 `index` 升序排序（`a.index - b.index`），移除 name/id 排序
+- [ ] 说明：按 index 累积拼接的逻辑本身正确，不会串台，此项仅修正顺序丢失
+- [ ] 可选：`toolCallMode` 采用互斥模式（进入工具模式后 content 只累积不推送），若需边推文字边调工具需改为双累积线
+
+---
+
 ## 一、即刻可做（低成本高收益，每项 ~1h）
 
 ### 1. Token 计数与上下文预算

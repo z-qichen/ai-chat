@@ -98,6 +98,10 @@ export interface StreamChunk {
   toolCalls?: Array<{ id: string; function: { name: string; arguments: string } }>
   /** 记忆提取完成时携带新增的记忆数量 */
   memoriesAdded?: number
+  /** 流结束时携带后端持久化的 assistant 消息真实 ID（用于前端回填本地乐观消息 ID） */
+  messageId?: string
+  /** 是否被用户中断 */
+  aborted?: boolean
 }
 
 /** 用户记忆条目 */

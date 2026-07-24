@@ -188,17 +188,19 @@ async function send() {
   isAborted.value = false
 
   // 添加用户消息到本地 Store
+  const localUserMessageId = genMsgId()
   chatStore.addMessageToSession(conversationId, {
-    id: genMsgId(),
+    id: localUserMessageId,
     role: 'user',
     content: userMessage,
     timestamp: Date.now(),
     files: files.length > 0 ? files : undefined,
   })
 
-  // 保存用户消息到后端
+  // 保存用户消息到后端，并用后端返回的真实 ID 回填本地消息，保证前后端 ID 一致
   try {
-    await addMessage(conversationId, 'user', userMessage, fileIds)
+    const savedUserMessage = await addMessage(conversationId, 'user', userMessage, fileIds)
+    chatStore.updateMessageId(conversationId, localUserMessageId, savedUserMessage.id)
   } catch (err) {
     console.error('保存用户消息失败:', err)
   }
@@ -277,6 +279,10 @@ async function consumeStream(
       if (chunk.done) {
         if (chunk.aborted) {
           isAborted.value = true
+        }
+        // 用后端返回的真实消息 ID 回填本地 assistant 消息，保证前后端 ID 一致
+        if (chunk.messageId) {
+          chatStore.updateMessageId(conversationId, assistantMessageId, chunk.messageId)
         }
         break
       }

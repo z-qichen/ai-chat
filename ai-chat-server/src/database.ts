@@ -1,11 +1,11 @@
-/**
+﻿/**
  * src/database.ts —— SQLite 数据库初始化与连接管理
  *
  * 使用 better-sqlite3 提供同步 API，适合单进程场景。
  * 初始化时自动创建所需的表结构。
  */
 import Database from 'better-sqlite3'
-import { config } from './config.ts'
+import { config } from './config'
 import fs from 'node:fs'
 import path from 'node:path'
 

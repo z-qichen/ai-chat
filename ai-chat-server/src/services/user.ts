@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/services/user.ts —— 用户业务逻辑
  *
  * 封装用户的数据库操作：
@@ -8,8 +8,8 @@
  * 密码存储格式：salt:hash（hex 编码，16 字节盐 + 64 字节哈希）
  */
 import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from 'node:crypto'
-import db from '../database.ts'
-import type { User } from '../types/index.ts'
+import db from '../database'
+import type { User } from '../types/index'
 
 /** 盐长度（字节） */
 const SALT_LENGTH = 16

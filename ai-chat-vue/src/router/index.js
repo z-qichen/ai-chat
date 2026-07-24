@@ -21,6 +21,18 @@ const router = createRouter({
             meta: { requiresAuth: true },
         },
         {
+            path: '/task',
+            name: 'task',
+            component: () => import('@/pages/TaskPage.vue'),
+            meta: { requiresAuth: true },
+        },
+        {
+            path: '/plugins',
+            name: 'plugins',
+            component: () => import('@/pages/PluginsPage.vue'),
+            meta: { requiresAuth: true },
+        },
+        {
             path: '/login',
             name: 'login',
             component: () => import('@/pages/LoginPage.vue'),

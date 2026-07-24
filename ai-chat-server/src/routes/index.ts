@@ -1,16 +1,16 @@
-/**
+﻿/**
  * src/routes/index.ts —— 路由聚合
  *
  * 统一注册所有路由模块。
  */
 import type { FastifyInstance } from 'fastify'
-import authRoutes from './auth.ts'
-import conversationRoutes from './conversations.ts'
-import messageRoutes from './messages.ts'
-import chatRoutes from './chat.ts'
-import modelRoutes from './models.ts'
-import fileRoutes from './files.ts'
-import memoryRoutes from './memory.ts'
+import authRoutes from './auth'
+import conversationRoutes from './conversations'
+import messageRoutes from './messages'
+import chatRoutes from './chat'
+import modelRoutes from './models'
+import fileRoutes from './files'
+import memoryRoutes from './memory'
 
 export default async function routes(app: FastifyInstance) {
   await app.register(authRoutes)

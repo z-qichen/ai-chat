@@ -425,3 +425,34 @@ description: `从当前对话中提取用户新透露的个人信息...
 |------|------|
 | `ai-chat-server/src/routes/chat.ts` | 移除 `shouldExtractMemories` 导入和条件判断，改为每次对话都调用后台提取 |
 | `ai-chat-server/src/services/memory.ts` | 更新 `EXTRACT_USER_INFO_TOOL` 描述（强调独立性 + 无新信息不调用），删除 `shouldExtractMemories` 函数 |
+
+---
+
+# 新增定时任务页 / 插件页及侧边栏入口
+
+## 目标
+
+在侧边栏底部「定时任务」「插件」两个按钮上补齐图标，并新建对应页面、配置路由、接入点击跳转。
+
+## 方案
+
+- 新建两个占位页面 `TaskPage.vue`、`PluginsPage.vue`，遵循项目约定（`<script setup lang="ts">` + 文件级 JSDoc 注释 + `<style scoped lang="less">`）
+- 路由 `index.ts` 与编译产物 `index.js` **同步**注册 `/task`、`/plugins`，均带 `requiresAuth: true` 认证守卫（与既有页面一致）
+- 侧边栏两个按钮复用既有 `router` 实例（`Sidebar.vue:31` 已通过 `useRouter()` 创建），`@click="router.push('/task')"` / `router.push('/plugins')`
+- 图标沿用侧边栏现有 SVG 描边风格（`stroke="currentColor"` + `stroke-width="2"`）：定时任务用时钟图标，插件用拼图/puzzle 图标
+
+## 注意点
+
+- 路由存在 `.ts` 和 `.js` 两份，必须同步修改（与 `/memory` 路由处理方式一致，见前文记忆功能重构）
+- `npx vue-tsc --noEmit` 类型检查通过
+
+## 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `ai-chat-vue/src/pages/TaskPage.vue` | **新建** 定时任务页面（占位） |
+| `ai-chat-vue/src/pages/PluginsPage.vue` | **新建** 插件页面（占位） |
+| `ai-chat-vue/src/router/index.ts` | 注册 `/task`、`/plugins` 路由 |
+| `ai-chat-vue/src/router/index.js` | 同步注册 `/task`、`/plugins` 路由 |
+| `ai-chat-vue/src/components/Sidebar.vue` | 两按钮补齐图标 + 接入 `router.push` 跳转 |
+| `ai-chat-vue/README.md` | 更新路由说明、待完成清单、目录结构 |

@@ -5,20 +5,45 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'chat',
       component: () => import('@/pages/ChatPage.vue'),
       meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'chat-new',
+          component: () => import('@/components/ChatArea.vue'),
+        },
+        {
+          path: 'chat/:id',
+          name: 'chat-session',
+          component: () => import('@/components/ChatArea.vue'),
+        },
+        {
+          path: 'task',
+          name: 'task',
+          component: () => import('@/pages/TaskPage.vue'),
+        },
+        {
+          path: 'plugins',
+          name: 'plugins',
+          component: () => import('@/pages/PluginsPage.vue'),
+        },
+        {
+          path: 'history',
+          name: 'history',
+          component: () => import('@/pages/HistoryPage.vue'),
+        },
+        {
+          path: 'memory',
+          name: 'memory',
+          component: () => import('@/pages/MemoryPage.vue'),
+        },
+      ],
     },
     {
       path: '/settings',
       name: 'settings',
       component: () => import('@/pages/SettingsPage.vue'),
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/memory',
-      name: 'memory',
-      component: () => import('@/pages/MemoryPage.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -42,7 +67,7 @@ router.beforeEach((to, _from) => {
   }
 
   if (to.name === 'login' && token) {
-    return { name: 'chat' }
+    return { name: 'chat-new' }
   }
 })
 

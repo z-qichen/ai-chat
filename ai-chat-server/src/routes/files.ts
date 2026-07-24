@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/routes/files.ts —— 文件上传路由
  *
  * POST /api/files/upload — 上传文件（multipart）
@@ -6,9 +6,9 @@
  * 需要 JWT 认证，文件按用户隔离存储。
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import { authGuard } from '../middlewares/auth.ts'
-import { saveFile, getFileRecord } from '../services/file.ts'
-import { config } from '../config.ts'
+import { authGuard } from '../middlewares/auth'
+import { saveFile, getFileRecord } from '../services/file'
+import { config } from '../config'
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/png',

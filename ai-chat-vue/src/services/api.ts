@@ -105,10 +105,32 @@ function toSessionMeta(c: ConversationsListResponse['data'][number]): SessionMet
   }
 }
 
-/** 获取所有会话元数据列表（用于侧边栏同步） */
-export async function getConversations(): Promise<SessionMeta[]> {
-  const res = await request<ConversationsListResponse>('/conversations')
-  return (res.data || []).map(toSessionMeta)
+/** 会话分页返回结构 */
+export interface PaginatedConversations {
+  data: SessionMeta[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+
+/**
+ * 获取会话元数据列表（游标分页）
+ *
+ * @param cursor  游标，不传则返回最新一页
+ * @param limit   每页条数，默认 30
+ */
+export async function getConversations(
+  cursor?: string | null,
+  limit = 30
+): Promise<PaginatedConversations> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (cursor) params.set('cursor', cursor)
+  const path = `/conversations?${params}`
+  const res = await request<ConversationsListResponse>(path)
+  return {
+    data: (res.data || []).map(toSessionMeta),
+    nextCursor: res.nextCursor,
+    hasMore: res.hasMore,
+  }
 }
 
 /** 创建新会话 */
@@ -149,16 +171,16 @@ export interface MessagesResponse {
  * 获取会话消息（游标分页）
  *
  * @param id      会话 ID
- * @param before  游标：返回早于此消息 ID 的一页（不传则返回最新一页）
+ * @param cursor  游标：返回早于此时间戳的一页（不传则返回最新一页）
  * @param limit   每页条数，默认 50
  */
 export function getMessages(
   id: string,
-  before?: string,
+  cursor?: string,
   limit = 50
 ): Promise<MessagesResponse> {
   const params = new URLSearchParams({ limit: String(limit) })
-  if (before) params.set('before', before)
+  if (cursor) params.set('cursor', cursor)
   return request(`/conversations/${id}/messages?${params}`)
 }
 
@@ -251,6 +273,7 @@ export async function* streamReply(
           done: parsed.done,
           type: parsed.type,
           aborted: parsed.aborted,
+          messageId: parsed.messageId,
         }
         if (parsed.done) return
       } catch (e) {
@@ -334,6 +357,7 @@ export async function* continueChat(
           done: parsed.done,
           type: parsed.type,
           aborted: parsed.aborted,
+          messageId: parsed.messageId,
         }
         if (parsed.done) return
       } catch (e) {

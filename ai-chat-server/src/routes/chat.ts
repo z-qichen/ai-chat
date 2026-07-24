@@ -1,4 +1,4 @@
-/**
+﻿/**
  * src/routes/chat.ts —— SSE 流式对话路由
  *
  * POST /api/conversations/:id/chat/stream — SSE 流式回复（含记忆自动提取）
@@ -11,14 +11,14 @@
  */
 import { Readable } from 'node:stream'
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import { authGuard } from '../middlewares/auth.ts'
-import { chatStream, chat } from '../services/deepseek.ts'
-import { createMessage, updateMessage, listAllMessages } from '../services/message.ts'
-import { getConversationByUser, createConversation, updateConversation } from '../services/conversation.ts'
-import { buildMessages } from '../services/chat.ts'
-import { getMemoryTool, handleExtractToolCalls } from '../services/memory.ts'
-import { logger } from '../logger.ts'
-import type { StreamRequestWithFiles, StreamChunk } from '../types/index.ts'
+import { authGuard } from '../middlewares/auth'
+import { chatStream, chat } from '../services/deepseek'
+import { createMessage, updateMessage, listAllMessages } from '../services/message'
+import { getConversationByUser, createConversation, updateConversation } from '../services/conversation'
+import { buildMessages } from '../services/chat'
+import { getMemoryTool, handleExtractToolCalls } from '../services/memory'
+import { logger } from '../logger'
+import type { StreamRequestWithFiles, StreamChunk } from '../types/index'
 
 const activeStreams = new Map<string, AbortController>()
 
@@ -111,16 +111,21 @@ export default async function chatRoutes(app: FastifyInstance) {
             }
           }
           logger.chunk(chunk.content || '(空)', chunk.type)
+          // deepseek 的 done chunk 暂不透传，待保存消息后统一发送带 messageId 的 done
+          if (chunk.done) continue
           stream.push(`data: ${JSON.stringify(chunk)}\n\n`)
         }
 
-        createMessage({
+        const savedAssistant = createMessage({
           conversationId: id,
           role: 'assistant',
           content: acc.fullContent,
           timestamp: Date.now(),
           reasoningContent: acc.fullReasoningContent || null,
         })
+
+        // 发送带真实 messageId 的 done，供前端回填本地 assistant 消息 ID
+        stream.push(`data: ${JSON.stringify({ content: '', done: true, type: 'answer', messageId: savedAssistant.id } as StreamChunk)}\n\n`)
 
         updateConversation(id, {})
 
@@ -139,7 +144,7 @@ export default async function chatRoutes(app: FastifyInstance) {
         logger.error('POST /chat/stream 出错', error)
         if (controller.signal.aborted && acc.fullContent) {
           logger.info('中断但有部分内容，保存 partial', { partialLength: acc.fullContent.length })
-          createMessage({
+          const savedPartial = createMessage({
             conversationId: id,
             role: 'assistant',
             content: acc.fullContent,
@@ -147,7 +152,7 @@ export default async function chatRoutes(app: FastifyInstance) {
             partial: true,
             reasoningContent: acc.fullReasoningContent || null,
           })
-          stream.push(`data: ${JSON.stringify({ content: '', done: true, aborted: true })}\n\n`)
+          stream.push(`data: ${JSON.stringify({ content: '', done: true, aborted: true, messageId: savedPartial.id } as StreamChunk)}\n\n`)
         } else if (!controller.signal.aborted) {
           stream.push(`data: ${JSON.stringify({ error: error.message || '未知错误' })}\n\n`)
         }
@@ -221,25 +226,32 @@ export default async function chatRoutes(app: FastifyInstance) {
               newContent += chunk.content
             }
           }
+          // done chunk 暂不透传，待保存消息后统一发送带 messageId 的 done
+          if (chunk.done) continue
           stream.push(`data: ${JSON.stringify(chunk)}\n\n`)
         }
 
         const allMsgs = listAllMessages(id)
         const partialMsg = allMsgs.reverse().find(m => m.partial)
+        let continuedMessageId: string
         if (partialMsg) {
           updateMessage(partialMsg.id, {
             content: partialMsg.content + newContent,
             partial: false,
           })
+          continuedMessageId = partialMsg.id
         } else {
-          createMessage({
+          const savedAssistant = createMessage({
             conversationId: id,
             role: 'assistant',
             content: newContent,
             timestamp: Date.now(),
             reasoningContent: newReasoningContent || null,
           })
+          continuedMessageId = savedAssistant.id
         }
+
+        stream.push(`data: ${JSON.stringify({ content: '', done: true, type: 'answer', messageId: continuedMessageId } as StreamChunk)}\n\n`)
 
         updateConversation(id, {})
         logger.end('POST /chat/continue 完成', {
@@ -256,8 +268,10 @@ export default async function chatRoutes(app: FastifyInstance) {
               content: partialMsg.content + newContent,
               partial: true,
             })
+            stream.push(`data: ${JSON.stringify({ content: '', done: true, aborted: true, messageId: partialMsg.id } as StreamChunk)}\n\n`)
+          } else {
+            stream.push(`data: ${JSON.stringify({ content: '', done: true, aborted: true } as StreamChunk)}\n\n`)
           }
-          stream.push(`data: ${JSON.stringify({ content: '', done: true, aborted: true })}\n\n`)
         } else if (!controller.signal.aborted) {
           stream.push(`data: ${JSON.stringify({ error: error.message || '未知错误' })}\n\n`)
         }
