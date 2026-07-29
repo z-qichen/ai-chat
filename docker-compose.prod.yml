@@ -1,0 +1,60 @@
+# ============================================================
+# docker-compose.prod.yml  —— 生产环境覆盖配置
+#
+# 使用方法:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 与基础 compose 的区别:
+#   - 更严格的资源限制
+#   - 后端端口不对外暴露（仅内部访问）
+#   - 日志轮转策略
+# ============================================================
+
+services:
+  backend:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "10"
+
+  frontend:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "10"
+
+  # ==================== Caddy HTTPS/SSL 终止 ====================
+  caddy:
+    image: caddy:2-alpine
+    container_name: ai-chat-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data:/data
+      - ./caddy-config:/config
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    networks:
+      - default
+    depends_on:
+      frontend:
+        condition: service_healthy

@@ -4,28 +4,91 @@
 
 ---
 
+## 上线清单
+
+### 准备
+
+- [ ] 购买一台 Linux 服务器（最低 1核2G，推荐阿里云/腾讯云轻量应用服务器）
+- [ ] 准备一个域名，DNS 解析 A 记录到服务器 IP
+- [ ] 服务器安装 Docker：`curl -fsSL https://get.docker.com | bash`
+- [ ] 获取 DeepSeek API Key：[platform.deepseek.com](https://platform.deepseek.com) → API Keys
+- [ ] GitHub 仓库 Settings → Secrets → Actions 配置 4 个密钥：
+
+| Secret 名 | 说明 |
+|-----------|------|
+| `DEPLOY_HOST` | 服务器 IP |
+| `DEPLOY_USER` | SSH 用户名（通常 root） |
+| `DEPLOY_SSH_KEY` | 服务器 SSH 私钥 |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
+
+### 部署
+
+```bash
+# SSH 到服务器，执行：
+git clone https://github.com/z-qichen/ai-chat.git /opt/ai-chat
+cd /opt/ai-chat
+
+# 创建后端环境变量
+cp ai-chat-server/.env.example ai-chat-server/.env
+# 编辑 ai-chat-server/.env，填入 DEEPSEEK_API_KEY 和 JWT_SECRET
+
+# 设置域名
+echo "DOMAIN=你的域名.com" > .env
+
+# 启动
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### 自动部署流程
+
+```
+本地开发 → git commit → git push main
+    │
+    ▼
+GitHub Actions 自动触发
+    │
+    ├─ lint 检查
+    ├─ 构建 Docker 镜像（前后端）
+    ├─ 推送到 ghcr.io
+    ├─ SSH 到服务器
+    ├─ docker compose pull（拉新镜像）
+    ├─ docker compose up -d（重启）
+    │
+    ▼
+  上线完成 ✅
+```
+
+> JWT_SECRET 首次自动生成，后续部署复用已有值，用户不会每次被踢下线。
+
+### 已修复的上线问题
+
+- [x] `Dockerfile` 中 `pnpm deploy --legacy` 移除（pnpm v10 已废弃该参数）
+- [x] CI/CD 中 JWT_SECRET 每次部署重新生成 → 改为首次生成后续复用
+
+---
+
 ## 〇、后端规范化（优先，对齐标准请求流程）
 
 ### 0.1 全局错误处理
 
-- [ ] `index.ts` 注册 `app.setErrorHandler`，兜底所有未捕获异常
-- [ ] 区分错误类型：Zod 校验错误 → 400、业务错误 → 对应状态码、其余 → 500
-- [ ] 自定义 `AppError` 类（含 `code` / `statusCode` / `message`），Service 层抛出
-- [ ] 注册 `app.setNotFoundHandler`，统一 404 响应格式
-- [ ] 错误统一走响应格式，避免泄露堆栈到前端
+- [x] `index.ts` 注册 `app.setErrorHandler`，兜底所有未捕获异常
+- [x] 区分错误类型：Zod 校验错误 → 400、业务错误 → 对应状态码、其余 → 500
+- [x] 自定义 `AppError` 类（含 `code` / `statusCode` / `message`），Service 层抛出
+- [x] 注册 `app.setNotFoundHandler`，统一 404 响应格式
+- [x] 错误统一走响应格式，避免泄露堆栈到前端
 
 ### 0.2 统一响应格式
 
-- [ ] 定义统一结构 `{ code, message, data }`
-- [ ] 封装 `success(data, message?)` / `fail(code, message)` 辅助函数
-- [ ] 各路由改用统一格式（`conversations` / `auth` / `messages` / `chat` / `files` / `memory` / `models`）
-- [ ] 前端 API 层同步适配新响应结构
+- [x] 定义统一结构 `{ code, message, data }`
+- [x] 封装 `success(data, message?)` / `fail(code, message)` 辅助函数
+- [x] 各路由改用统一格式（`conversations` / `auth` / `messages` / `chat` / `files` / `memory` / `models`）
+- [x] 前端 API 层同步适配新响应结构
 
 ### 0.3 参数校验补全
 
-- [ ] 为路径参数 `:id` 增加 Zod 校验（UUID 格式）
-- [ ] 抽取通用 `idParamSchema`，覆盖所有含 `:id` 的路由
-- [ ] 统一校验失败响应走全局错误处理（配合 0.1）
+- [x] 为路径参数 `:id` 增加 Zod 校验（UUID 格式）
+- [x] 抽取通用 `idParamSchema`，覆盖所有含 `:id` 的路由
+- [x] 统一校验失败响应走全局错误处理（配合 0.1）
 
 ### 0.4 流式 tool_calls 排序修复（`deepseek.ts`）
 
@@ -41,27 +104,27 @@
 
 ### 1. Token 计数与上下文预算
 
-- [ ] `buildMessages()` 中引入 `tiktoken` 估算 token 数量
-- [ ] 超限时自动裁剪最早的消息（滑动窗口）
-- [ ] 前端展示当前上下文用量（进度条/百分比）
+- [x] `buildMessages()` 中引入 `tiktoken` 估算 token 数量
+- [x] 超限时自动裁剪最早的消息（滑动窗口）
+- [x] 前端展示当前上下文用量（进度条/百分比）
 
 ### 2. 系统提示词配置化
 
-- [ ] 前端 `config store` 中的 `systemPrompt` 字段接入后端
-- [ ] 后端从数据库读取用户自定义系统提示词
-- [ ] 支持简单变量替换（`{{user_name}}`、`{{date}}`）
+- [x] 前端 `config store` 中的 `systemPrompt` 字段接入后端
+- [x] 后端从数据库读取用户自定义系统提示词
+- [x] 支持简单变量替换（`{{user_name}}`、`{{date}}`）
 
 ### 3. API 重试与容错
 
-- [ ] DeepSeek API 调用加 3 次指数退避重试（1s / 2s / 4s）
-- [ ] 区分可重试错误（429/5xx）与不可重试错误（400/401）
+- [x] DeepSeek API 调用加 3 次指数退避重试（1s / 2s / 4s）
+- [x] 区分可重试错误（429/5xx）与不可重试错误（400/401）
 - [ ] 后台记忆提取失败时写日志而非静默吞掉
 
 ### 4. 主对话支持工具调用
 
-- [ ] 将 Tool Calling 从后台扩展到主对话流
-- [ ] 实现基础 Agent Loop：LLM 返回 tool_calls → 执行工具 → 结果注入 → 再次调用
-- [ ] 先加一个简单工具（计算器/当前时间）验证流程
+- [x] 将 Tool Calling 从后台扩展到主对话流
+- [x] 实现基础 Agent Loop：LLM 返回 tool_calls → 执行工具 → 结果注入 → 再次调用
+- [x] 先加一个简单工具（计算器/当前时间）验证流程
 
 ---
 
@@ -76,7 +139,7 @@
 ### 6. 可观测性基础
 
 - [ ] 每次 LLM 调用记录：token 用量、延迟、模型、是否命中缓存
-- [ ] 接入结构化日志（pino 或 winston）
+- [x] 接入结构化日志（pino 或 winston）
 - [ ] 前端展示每次请求的 token 消耗
 
 ### 7. 安全护栏（Guardrails）
@@ -92,9 +155,9 @@
 ### 8. Agent 循环正式化
 
 - [ ] 将 Agent Loop 抽象为独立模块（`agent-runner.ts`）
-- [ ] 支持多轮工具调用，设置最大迭代次数防止死循环
+- [x] 支持多轮工具调用，设置最大迭代次数防止死循环
 - [ ] 工具注册中心：支持插件式注册，运行时热加载
-- [ ] SSE 流式推送 Agent 中间步骤（`type: 'tool_call'` / `type: 'tool_result'`）
+- [x] SSE 流式推送 Agent 中间步骤（`type: 'tool_call'` / `type: 'tool_result'`）
 
 ### 9. 模型路由与降级
 

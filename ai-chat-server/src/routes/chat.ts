@@ -17,8 +17,14 @@ import { createMessage, updateMessage, listAllMessages } from '../services/messa
 import { getConversationByUser, createConversation, updateConversation } from '../services/conversation'
 import { buildMessages } from '../services/chat'
 import { getMemoryTool, handleExtractToolCalls } from '../services/memory'
+import { getMainTools, getMainToolDefinitions, getToolExecutor } from '../services/tools'
+import type { SearchToolOutput } from '../services/search'
+import { getUserSystemPrompt } from '../services/user'
 import { logger } from '../logger'
-import type { StreamRequestWithFiles, StreamChunk } from '../types/index'
+import type { StreamRequestWithFiles, StreamChunk, ChatMessage } from '../types/index'
+import { idParamSchema } from '../schemas/common'
+import { validate } from '../utils/validators'
+import { success, fail } from '../utils/response'
 
 const activeStreams = new Map<string, AbortController>()
 
@@ -28,34 +34,37 @@ export default async function chatRoutes(app: FastifyInstance) {
   app.post(
     '/api/conversations/:id/chat/stop',
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string }
+      const { id } = validate(idParamSchema, request.params)
       const userId = (request as any).user.userId
 
       const conversation = getConversationByUser(id, userId)
       if (!conversation) {
-        return reply.status(404).send({ error: '对话不存在' })
+        return reply.status(404).send(fail('CONVERSATION_NOT_FOUND', '对话不存在'))
       }
 
       const controller = activeStreams.get(id)
       if (controller) {
         logger.info('停止流式生成', { conversationId: id })
         controller.abort()
-        return { success: true }
+        return success(null, '已停止生成')
       }
-      return { success: false, message: '没有正在进行的流式对话' }
+      return success(null, '没有正在进行的流式对话')
     }
   )
 
   app.post(
     '/api/conversations/:id/chat/stream',
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string }
+      const { id } = validate(idParamSchema, request.params)
       const userId = (request as any).user.userId
-      const { model: reqModel, fileIds, thinking } = request.body as StreamRequestWithFiles
+      const userName = (request as any).user.username
+      const { model: reqModel, fileIds, thinking, systemPrompt: reqSystemPrompt, webSearch } = request.body as StreamRequestWithFiles
 
       const isThinking = thinking?.type === 'enabled'
-      const defaultModel = isThinking ? 'deepseek-v4-pro' : 'deepseek-chat'
+      const defaultModel = isThinking ? 'deepseek-v4-pro' : 'deepseek-v4-flash'
       const model = reqModel ?? defaultModel
+
+      const systemPrompt = reqSystemPrompt ?? getUserSystemPrompt(userId) ?? undefined
 
       let conversation = getConversationByUser(id, userId)
       if (!conversation) {
@@ -82,6 +91,7 @@ export default async function chatRoutes(app: FastifyInstance) {
       })
 
       const acc = { fullContent: '', fullReasoningContent: '' }
+      const accToolCalls: Array<{ name: string; args: string; result?: string; searchResults?: any; answer?: string; responseTime?: number }> = []
       let memoriesAdded = 0
 
       logger.separator()
@@ -93,10 +103,97 @@ export default async function chatRoutes(app: FastifyInstance) {
       })
 
       try {
-        const messages = await buildMessages({ conversationId: id, userId })
+        const buildResult = await buildMessages({ conversationId: id, userId, systemPrompt, userName })
+        const { messages, tokenCount, tokenLimit } = buildResult
+        const mainTools = getMainToolDefinitions({ includeSearch: webSearch })
 
+        stream.push(`data: ${JSON.stringify({ type: 'meta', tokenCount, tokenLimit })}\n\n`)
+
+        const agentMessages: ChatMessage[] = [...messages]
+
+        // ---- Phase 1: Agent Loop（非流式 tool calling） ----
+        const maxRounds = 5
+        for (let round = 0; round < maxRounds; round++) {
+          const result = await chat({
+            messages: agentMessages,
+            model,
+            signal: controller.signal,
+            tools: mainTools,
+          })
+
+          if (result.toolCalls.length === 0) break
+
+          agentMessages.push({
+            role: 'assistant',
+            content: null,
+            tool_calls: result.toolCalls.map(tc => ({
+              id: tc.id,
+              type: 'function' as const,
+              function: { name: tc.function.name, arguments: tc.function.arguments },
+            })),
+          })
+
+          for (const tc of result.toolCalls) {
+            stream.push(`data: ${JSON.stringify({
+              type: 'tool_call',
+              content: '',
+              done: false,
+              toolCallName: tc.function.name,
+              toolCallArgs: tc.function.arguments,
+            } as StreamChunk)}\n\n`)
+
+            let toolOutput: string
+            let searchData: StreamChunk['searchData']
+            try {
+              const executor = getToolExecutor(tc.function.name)
+              if (!executor) {
+                toolOutput = `未知工具: ${tc.function.name}`
+              } else {
+                const rawOutput = await executor.execute(tc.function.arguments)
+                if (tc.function.name === 'web_search') {
+                  const parsed = JSON.parse(rawOutput) as SearchToolOutput
+                  toolOutput = parsed.llmText
+                  searchData = {
+                    answer: parsed.answer,
+                    results: parsed.results,
+                    responseTime: parsed.responseTime,
+                  }
+                } else {
+                  toolOutput = rawOutput
+                }
+              }
+            } catch (err: any) {
+              toolOutput = `工具执行错误: ${err.message || '未知错误'}`
+            }
+
+            stream.push(`data: ${JSON.stringify({
+              type: 'tool_result',
+              content: searchData ? '' : toolOutput,
+              done: false,
+              toolCallName: tc.function.name,
+              searchData,
+            } as StreamChunk)}\n\n`)
+
+            accToolCalls.push({
+              name: tc.function.name,
+              args: tc.function.arguments,
+              result: searchData ? '' : toolOutput,
+              searchResults: searchData?.results,
+              answer: searchData?.answer,
+              responseTime: searchData?.responseTime,
+            })
+
+            agentMessages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: toolOutput,
+            })
+          }
+        }
+
+        // ---- Phase 2: 流式输出最终答案 ----
         const deepseekStream = chatStream({
-          messages,
+          messages: agentMessages,
           model,
           signal: controller.signal,
           thinking,
@@ -111,7 +208,6 @@ export default async function chatRoutes(app: FastifyInstance) {
             }
           }
           logger.chunk(chunk.content || '(空)', chunk.type)
-          // deepseek 的 done chunk 暂不透传，待保存消息后统一发送带 messageId 的 done
           if (chunk.done) continue
           stream.push(`data: ${JSON.stringify(chunk)}\n\n`)
         }
@@ -122,6 +218,7 @@ export default async function chatRoutes(app: FastifyInstance) {
           content: acc.fullContent,
           timestamp: Date.now(),
           reasoningContent: acc.fullReasoningContent || null,
+          toolCalls: accToolCalls.length > 0 ? accToolCalls : null,
         })
 
         // 发送带真实 messageId 的 done，供前端回填本地 assistant 消息 ID
@@ -132,7 +229,7 @@ export default async function chatRoutes(app: FastifyInstance) {
         memoriesAdded = await processMemoriesInBackground({
           conversationId: id,
           userId,
-          baseSystemPrompt: '你是一个有用的AI助手。',
+          baseSystemPrompt: systemPrompt ?? '你是一个有用的AI助手。',
         })
 
         logger.end('POST /chat/stream 完成', {
@@ -151,6 +248,7 @@ export default async function chatRoutes(app: FastifyInstance) {
             timestamp: Date.now(),
             partial: true,
             reasoningContent: acc.fullReasoningContent || null,
+            toolCalls: accToolCalls.length > 0 ? accToolCalls : null,
           })
           stream.push(`data: ${JSON.stringify({ content: '', done: true, aborted: true, messageId: savedPartial.id } as StreamChunk)}\n\n`)
         } else if (!controller.signal.aborted) {
@@ -179,16 +277,20 @@ export default async function chatRoutes(app: FastifyInstance) {
   app.post(
     '/api/conversations/:id/chat/continue',
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const { id } = request.params as { id: string }
+      const { id } = validate(idParamSchema, request.params)
       const userId = (request as any).user.userId
-      const { model: reqModel = 'deepseek-chat', thinking } = (request.body || {}) as StreamRequestWithFiles
+      const userName = (request as any).user.username
+      const { model: reqModel = 'deepseek-v4-flash', thinking, systemPrompt: reqSystemPrompt } = (request.body || {}) as StreamRequestWithFiles
+
+      const systemPrompt = reqSystemPrompt ?? getUserSystemPrompt(userId) ?? undefined
 
       const conversation = getConversationByUser(id, userId)
       if (!conversation) {
-        return reply.status(404).send({ error: '对话不存在' })
+        return reply.status(404).send(fail('CONVERSATION_NOT_FOUND', '对话不存在'))
       }
 
-      const messages = await buildMessages({ conversationId: id, userId })
+      const buildResult = await buildMessages({ conversationId: id, userId, systemPrompt, userName })
+      const { messages, tokenCount, tokenLimit } = buildResult
 
       const stream = new Readable({ read() {} })
 
@@ -200,6 +302,8 @@ export default async function chatRoutes(app: FastifyInstance) {
       reply.send(stream)
 
       stream.push(':ok\n\n')
+
+      stream.push(`data: ${JSON.stringify({ type: 'meta', tokenCount, tokenLimit })}\n\n`)
 
       const controller = new AbortController()
       activeStreams.set(id, controller)
@@ -238,6 +342,7 @@ export default async function chatRoutes(app: FastifyInstance) {
           updateMessage(partialMsg.id, {
             content: partialMsg.content + newContent,
             partial: false,
+            reasoningContent: (partialMsg.reasoningContent || '') + newReasoningContent || null,
           })
           continuedMessageId = partialMsg.id
         } else {
@@ -267,6 +372,7 @@ export default async function chatRoutes(app: FastifyInstance) {
             updateMessage(partialMsg.id, {
               content: partialMsg.content + newContent,
               partial: true,
+              reasoningContent: (partialMsg.reasoningContent || '') + newReasoningContent || null,
             })
             stream.push(`data: ${JSON.stringify({ content: '', done: true, aborted: true, messageId: partialMsg.id } as StreamChunk)}\n\n`)
           } else {
@@ -292,14 +398,14 @@ async function processMemoriesInBackground(params: {
 }): Promise<number> {
   const { conversationId, userId, baseSystemPrompt } = params
   try {
-    const messages = await buildMessages({ conversationId, userId, systemPrompt: baseSystemPrompt })
+    const result = await buildMessages({ conversationId, userId, systemPrompt: baseSystemPrompt })
     const memoryTool = getMemoryTool()
-    const result = await chat({ messages, model: 'deepseek-chat', tools: [memoryTool] })
-    if (result.toolCalls.length > 0) {
-      return handleExtractToolCalls(result.toolCalls, userId)
+    const chatResult = await chat({ messages: result.messages, model: 'deepseek-v4-flash', tools: [memoryTool] })
+    if (chatResult.toolCalls.length > 0) {
+      return handleExtractToolCalls(chatResult.toolCalls, userId)
     }
-  } catch {
-    // 后台提取失败静默处理
+  } catch (err) {
+    logger.error(`后台记忆提取失败 conversationId=${conversationId}`, err)
   }
   return 0
 }

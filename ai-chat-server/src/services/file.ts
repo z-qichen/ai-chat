@@ -13,17 +13,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import db from '../database'
 import { config } from '../config'
-import type { UploadedFile } from '../types/index'
+import type { UploadedFile, ProcessedContent } from '../types/index'
 
 const UPLOAD_DIR = path.resolve(config.upload.dir)
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true })
-}
-
-export interface ProcessedContent {
-  textContent: string | null
-  imageDataUrl: string | null
 }
 
 export function saveFile(

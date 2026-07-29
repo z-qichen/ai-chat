@@ -1,7 +1,8 @@
 ﻿/**
  * src/routes/models.ts —— 模型校验路由
  *
- * POST /api/models/validate —— 校验模型名称是否合法
+ * GET  /api/models           —— 返回支持的模型列表（含展示标签）
+ * POST /api/models/validate  —— 校验模型名称是否合法
  *
  * 前端传入用户期望的模型名称，后端校验：
  * 1. 格式是否合法（非空字符串）
@@ -11,6 +12,13 @@
 import type { FastifyInstance } from 'fastify'
 import { config } from '../config'
 import type { ValidateModelBody, ValidateModelResponse } from '../types/index'
+import { success } from '../utils/response'
+
+/** 模型展示标签映射 */
+const MODEL_LABELS: Record<string, string> = {
+  'deepseek-v4-pro': 'DeepSeek V4 Pro',
+  'deepseek-v4-flash': 'DeepSeek V4 Flash',
+}
 
 /**
  * 计算两个字符串的编辑距离（Levenshtein Distance）
@@ -65,15 +73,23 @@ function findClosestModel(input: string): string | null {
 }
 
 export default async function modelRoutes(app: FastifyInstance) {
+  /** 获取支持的模型列表 */
+  app.get('/api/models', async () => {
+    return success(config.models.map((value) => ({
+      value,
+      label: MODEL_LABELS[value] ?? value,
+    })))
+  })
+
   app.post(
     '/api/models/validate',
-    async (request, reply): Promise<ValidateModelResponse> => {
+    async (request, reply) => {
       const { model } = request.body as ValidateModelBody
 
       const trimmed = model?.trim()
       if (!trimmed) {
         reply.code(400)
-        return { valid: false, error: '模型名称不能为空' }
+        return success({ valid: false, error: '模型名称不能为空' })
       }
 
       const normalized = trimmed.toLowerCase()
@@ -82,24 +98,24 @@ export default async function modelRoutes(app: FastifyInstance) {
         (m) => m.toLowerCase() === normalized
       )
       if (exactMatch) {
-        return { valid: true, model: exactMatch }
+        return success({ valid: true, model: exactMatch })
       }
 
       const suggestion = findClosestModel(normalized)
 
       reply.code(400)
       if (suggestion) {
-        return {
+        return success({
           valid: false,
           error: `模型 "${trimmed}" 不存在，您是否想使用 "${suggestion}"？`,
           suggestion,
-        }
+        })
       }
 
-      return {
+      return success({
         valid: false,
         error: `模型 "${trimmed}" 不在支持列表中，当前支持：${config.models.join('、')}`,
-      }
+      })
     }
   )
 }

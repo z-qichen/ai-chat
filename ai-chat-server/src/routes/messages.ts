@@ -8,41 +8,36 @@
  */
 import type { FastifyInstance } from 'fastify'
 import { authGuard } from '../middlewares/auth'
-import type { PaginationQuery, Message } from '../types/index'
+import type { PaginationQuery, SaveMessageBody } from '../types/index'
 import { listMessages, createMessage } from '../services/message'
 import { getConversationByUser, createConversation, updateConversation } from '../services/conversation'
-
-type SaveMessageBody = {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  files?: string
-}
+import { idParamSchema } from '../schemas/common'
+import { validate } from '../utils/validators'
+import { success } from '../utils/response'
 
 export default async function messageRoutes(app: FastifyInstance) {
   app.addHook('onRequest', authGuard)
 
   app.get('/api/conversations/:id/messages', async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const { id } = validate(idParamSchema, request.params)
     const userId = (request as any).user.userId
     const { cursor, limit = 50 } = request.query as PaginationQuery
 
     let conversation = getConversationByUser(id, userId)
     if (!conversation) {
-      // 前端可能持有本地生成的会话 ID（未通过后端创建），
-      // 自动在后端创建对应记录，避免 "会话不存在" 错误
       conversation = createConversation(userId, '新对话', 'deepseek-chat', id)
     }
 
     const result = listMessages(id, cursor, limit)
-    return {
+    return success({
       messages: result.data,
       hasMore: result.hasMore,
       total: result.total,
-    }
+    })
   })
 
   app.post('/api/conversations/:id/messages', async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const { id } = validate(idParamSchema, request.params)
     const userId = (request as any).user.userId
     const { role, content, files } = request.body as SaveMessageBody
 
@@ -62,6 +57,6 @@ export default async function messageRoutes(app: FastifyInstance) {
     updateConversation(id, {})
 
     reply.code(201)
-    return message
+    return success(message, '消息已保存')
   })
 }

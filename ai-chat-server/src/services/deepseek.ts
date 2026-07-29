@@ -10,67 +10,32 @@
 import OpenAI from 'openai'
 import { config } from '../config'
 import { logger } from '../logger'
-import type { StreamChunk, ContentPart, ThinkingConfig } from '../types/index'
+import type { StreamChunk, ContentPart, ThinkingConfig, ChatMessage, ToolDefinition, ToolCallResult, ChatResult, ChatOptions, StreamResult } from '../types/index'
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isRetriableError(err: any): boolean {
+  if (err.status === 429) return true
+  if (err.status >= 500) return true
+  if (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED') return true
+  return false
+}
 
 const client = new OpenAI({
   apiKey: config.deepseek.apiKey,
   baseURL: config.deepseek.baseUrl,
 })
 
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string | ContentPart[] | null
-  tool_call_id?: string
-  tool_calls?: Array<{
-    id: string
-    type: 'function'
-    function: { name: string; arguments: string }
-  }>
-}
-
-export interface ToolDefinition {
-  type: 'function'
-  function: {
-    name: string
-    description: string
-    parameters: Record<string, unknown>
-  }
-}
-
-export interface ToolCallResult {
-  id: string
-  function: {
-    name: string
-    arguments: string
-  }
-}
-
-export interface ChatResult {
-  content: string
-  toolCalls: ToolCallResult[]
-}
-
-export interface ChatOptions {
-  messages: ChatMessage[]
-  model?: string
-  signal?: AbortSignal
-  thinking?: ThinkingConfig
-  tools?: ToolDefinition[]
-}
-
 interface StreamAccumulator {
   content: string
-  toolCalls: Map<number, { id: string; name: string; arguments: string }>
+  toolCalls: Map<number, { id: string; name: string; arguments: string; index: number }>
   hasToolCalls: boolean
 }
 
-export interface StreamResult {
-  chunks: StreamChunk[]
-  toolCalls: ToolCallResult[]
-}
-
 export async function chat(options: ChatOptions): Promise<ChatResult> {
-  const { messages, model = 'deepseek-chat', signal, thinking, tools } = options
+  const { messages, model = 'deepseek-v4-flash', signal, thinking, tools } = options
   const params: Record<string, any> = { model, messages: messages as any[], stream: false }
 
   if (thinking?.type === 'enabled') {
@@ -80,26 +45,48 @@ export async function chat(options: ChatOptions): Promise<ChatResult> {
     params.tools = tools
   }
 
-  const response = await client.chat.completions.create(params as any, { signal }) as any
-  const choice = response.choices[0]
-  const content = choice?.message?.content ?? ''
-  const rawToolCalls = choice?.message?.tool_calls ?? []
+  const maxRetries = 3
+  let lastError: any
 
-  const toolCalls: ToolCallResult[] = rawToolCalls.map((tc: any) => ({
-    id: tc.id,
-    function: {
-      name: tc.function.name,
-      arguments: tc.function.arguments,
-    },
-  }))
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await client.chat.completions.create(params as any, { signal }) as any
+      const choice = response.choices[0]
+      const content = choice?.message?.content ?? ''
+      const rawToolCalls = choice?.message?.tool_calls ?? []
 
-  return { content, toolCalls }
+      const toolCalls: ToolCallResult[] = rawToolCalls.map((tc: any) => ({
+        id: tc.id,
+        function: {
+          name: tc.function.name,
+          arguments: tc.function.arguments,
+        },
+      }))
+
+      return { content, toolCalls }
+    } catch (err: any) {
+      lastError = err
+      if (attempt < maxRetries && isRetriableError(err)) {
+        const backoff = Math.pow(2, attempt) * 1000
+        logger.info(`DeepSeek API 调用失败，${backoff / 1000}s 后重试 (${attempt + 1}/${maxRetries})`, {
+          message: err.message,
+          status: err.status,
+          code: err.code,
+        })
+        await delay(backoff)
+        continue
+      }
+      throw err
+    }
+  }
+
+  throw lastError
 }
 
 export async function* chatStream(
   options: ChatOptions
 ): AsyncGenerator<StreamChunk> {
-  const { messages, model = 'deepseek-chat', signal, thinking, tools } = options
+  const { messages, model = 'deepseek-v4-flash', signal, thinking, tools } = options
   const params: Record<string, any> = { model, messages: messages as any[], stream: true }
   const exposeThinking = thinking?.type === 'enabled'
 
@@ -123,25 +110,51 @@ export async function* chatStream(
   })
 
   let stream: any
-  try {
-    if (signal?.aborted) {
-      logger.error('DeepSeek API 调用时 signal 已被提前中断')
-      throw new Error('Signal already aborted before API call')
+  const maxRetries = 3
+  let lastError: any
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (signal?.aborted) {
+        logger.error('DeepSeek API 调用时 signal 已被提前中断')
+        throw new Error('Signal already aborted before API call')
+      }
+      stream = await client.chat.completions.create(params as any, { signal }) as any
+      break
+    } catch (err: any) {
+      lastError = err
+      if (signal?.aborted) {
+        logger.error('DeepSeek API 创建流失败（signal 已中断）', {
+          message: err.message,
+          status: err.status,
+          code: err.code,
+        })
+        throw err
+      }
+      if (attempt < maxRetries && isRetriableError(err)) {
+        const backoff = Math.pow(2, attempt) * 1000
+        logger.info(`DeepSeek API 创建流失败，${backoff / 1000}s 后重试 (${attempt + 1}/${maxRetries})`, {
+          message: err.message,
+          status: err.status,
+          code: err.code,
+        })
+        await delay(backoff)
+        continue
+      }
+      logger.error('DeepSeek API 创建流失败', {
+        message: err.message,
+        status: err.status,
+        code: err.code,
+        type: err.type,
+        name: err.name,
+        stack: err.stack?.split('\n').slice(0, 3).join('\n'),
+        headers: err.headers,
+      })
+      throw err
     }
-    stream = await client.chat.completions.create(params as any, { signal }) as any
-  } catch (err) {
-    const e = err as any
-    logger.error('DeepSeek API 创建流失败', {
-      message: e.message,
-      status: e.status,
-      code: e.code,
-      type: e.type,
-      name: e.name,
-      stack: e.stack?.split('\n').slice(0, 3).join('\n'),
-      headers: e.headers,
-    })
-    throw err
   }
+
+  if (!stream) throw lastError
 
   let reasoningActive = false
   const acc: StreamAccumulator = {
@@ -166,7 +179,7 @@ export async function* chatStream(
       for (const tc of delta.tool_calls) {
         const index: number = tc.index ?? 0
         if (!acc.toolCalls.has(index)) {
-          acc.toolCalls.set(index, { id: tc.id ?? '', name: '', arguments: '' })
+          acc.toolCalls.set(index, { id: tc.id ?? '', name: '', arguments: '', index })
         }
         const entry = acc.toolCalls.get(index)!
         if (tc.id) entry.id = tc.id
@@ -204,7 +217,7 @@ export async function* chatStream(
 
   if (acc.hasToolCalls) {
     const toolCalls: ToolCallResult[] = Array.from(acc.toolCalls.values())
-      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+      .sort((a, b) => a.index - b.index)
       .map(tc => ({
         id: tc.id,
         function: { name: tc.name, arguments: tc.arguments },

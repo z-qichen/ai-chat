@@ -9,31 +9,81 @@
 import { listAllMessages } from './message'
 import { processFile } from './file'
 import { injectMemoriesIntoSystemPrompt } from './memory'
-import type { Message, ContentPart } from '../types/index'
+import { getEncoding } from 'js-tiktoken'
+import type { Message, ContentPart, BuildMessagesOptions, ChatMessage, BuildMessagesResult } from '../types/index'
 
-export interface BuildMessagesOptions {
-  conversationId: string
-  systemPrompt?: string
-  userId?: string
+const TOKEN_ENCODER = getEncoding('cl100k_base')
+const MAX_CONTEXT_TOKENS = 60000
+
+/** 默认系统提示词 */
+const DEFAULT_SYSTEM_PROMPT = '你是一个有用的AI助手。'
+
+/**
+ * 替换系统提示词中的模板变量
+ * - {{user_name}} → 用户名
+ * - {{date}} → 当前日期（YYYY-MM-DD）
+ */
+function replaceVariables(prompt: string, userName?: string): string {
+  const now = new Date()
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+  return prompt
+    .replace(/\{\{user_name\}\}/g, userName || '')
+    .replace(/\{\{date\}\}/g, dateStr)
 }
 
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string | ContentPart[] | null
-  tool_call_id?: string
-  tool_calls?: Array<{
-    id: string
-    type: 'function'
-    function: { name: string; arguments: string }
-  }>
+function estimateTokenCount(messages: ChatMessage[]): number {
+  let total = 0
+  for (const msg of messages) {
+    const content = msg.content
+    if (typeof content === 'string') {
+      total += TOKEN_ENCODER.encode(content).length
+    } else if (Array.isArray(content)) {
+      for (const part of content) {
+        if (part.type === 'text') {
+          total += TOKEN_ENCODER.encode(part.text).length
+        } else if (part.type === 'image_url') {
+          total += 85
+        }
+      }
+    }
+  }
+  return total
 }
 
-export async function buildMessages(options: BuildMessagesOptions): Promise<ChatMessage[]> {
-  const { conversationId, systemPrompt = '你是一个有用的AI助手。', userId } = options
+function trimMessages(messages: ChatMessage[]): { messages: ChatMessage[]; trimmedCount: number } {
+  const systemMsg = messages[0]
+  let trimmedCount = 0
+
+  while (true) {
+    const tokens = estimateTokenCount(messages)
+    if (tokens <= MAX_CONTEXT_TOKENS) break
+
+    const nonSystemCount = messages.length - 1
+    if (nonSystemCount <= 6) {
+      if (messages.length > 3) {
+        const last2 = messages.slice(-2)
+        trimmedCount += messages.length - 3
+        return { messages: [systemMsg, ...last2], trimmedCount }
+      }
+      break
+    }
+
+    messages.splice(1, 1)
+    trimmedCount++
+  }
+
+  return { messages, trimmedCount }
+}
+
+export async function buildMessages(options: BuildMessagesOptions): Promise<BuildMessagesResult> {
+  const { conversationId, systemPrompt = DEFAULT_SYSTEM_PROMPT, userId, userName } = options
+
+  const processedPrompt = replaceVariables(systemPrompt, userName)
 
   const finalSystemPrompt = userId
-    ? injectMemoriesIntoSystemPrompt(userId, systemPrompt)
-    : systemPrompt
+    ? injectMemoriesIntoSystemPrompt(userId, processedPrompt)
+    : processedPrompt
 
   const allMessages = listAllMessages(conversationId)
 
@@ -59,7 +109,15 @@ export async function buildMessages(options: BuildMessagesOptions): Promise<Chat
     }
   }
 
-  return messages
+  const { messages: trimmedMessages, trimmedCount } = trimMessages(messages)
+  const tokenCount = estimateTokenCount(trimmedMessages)
+
+  return {
+    messages: trimmedMessages,
+    tokenCount,
+    tokenLimit: MAX_CONTEXT_TOKENS,
+    trimmedCount,
+  }
 }
 
 async function buildUserContent(userText: string, fileIds: string[]): Promise<ContentPart[]> {

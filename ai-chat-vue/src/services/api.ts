@@ -9,21 +9,26 @@
  * 注：后端不可用时自动降级为本地模式，不影响前端正常使用。
  */
 
-import type { SessionMeta, Message, StreamChunk, AuthResponse, UploadFileResponse, FileMeta, MemoryItem } from '@/types'
+import type {
+  SessionMeta, Message, StreamChunk, AuthResponse, UploadFileResponse, FileMeta, MemoryItem,
+  RequestOptions, PaginatedConversations, MessagesResponse, ModelItem, ValidateModelResponse, UserSettingsResponse,
+} from '@/types'
 
-/** 后端 API 基础地址 */
-const BASE = 'http://localhost:4000/api'
+/**
+ * 后端 API 基础地址
+ *
+ * 开发环境 (npm run dev):   VITE_API_BASE = 'http://localhost:4000/api'
+ * 生产环境 (Docker/Nginx): VITE_API_BASE = '/api' （Nginx 反向代理到后端）
+ *
+ * Vite 会在构建时将 import.meta.env.VITE_* 替换为实际字符串，
+ * 因此不同环境构建出的 JS 中 BASE 值不同。
+ */
+const BASE = import.meta.env.VITE_API_BASE as string
 
 /** localStorage token key */
 const TOKEN_KEY = 'ai-chat-token'
 
-/** 统一请求配置（不含 method/body，由调用方传入 options） */
-export interface RequestOptions extends RequestInit {
-  /** AbortSignal，用于取消请求 */
-  signal?: AbortSignal
-}
-
-/** 统一请求封装：自动附加 JSON 头、Token 与错误处理 */
+/** 统一请求封装：自动附加 JSON 头、Token、错误处理与响应解包 */
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   const headers: Record<string, string> = {}
   if (options?.body !== undefined) {
@@ -42,11 +47,12 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
     let message = `请求失败 (${res.status})`
     try {
       const parsed = JSON.parse(body)
-      message = parsed.error || parsed.message || message
+      message = parsed.message || parsed.error || message
     } catch {}
     throw new Error(message)
   }
-  return res.json()
+  const json = await res.json()
+  return (json as any).data as T
 }
 
 // ---- 认证 API ----
@@ -102,14 +108,8 @@ function toSessionMeta(c: ConversationsListResponse['data'][number]): SessionMet
     title: c.title,
     updatedAt: c.updatedAt,
     messageCount: 0,
+    fromTaskId: (c as any).fromTaskId ?? null,
   }
-}
-
-/** 会话分页返回结构 */
-export interface PaginatedConversations {
-  data: SessionMeta[]
-  nextCursor: string | null
-  hasMore: boolean
 }
 
 /**
@@ -157,16 +157,6 @@ export function deleteConversation(id: string): Promise<void> {
 
 // ---- 消息 API ----
 
-/** 分页返回结构 */
-export interface MessagesResponse {
-  /** 消息列表，时间正序（旧→新） */
-  messages: Message[]
-  /** 是否还有更早的消息 */
-  hasMore: boolean
-  /** 该会话消息总数 */
-  total: number
-}
-
 /**
  * 获取会话消息（游标分页）
  *
@@ -210,16 +200,19 @@ export function addMessage(
  * 后端对接 DeepSeek API，通过 SSE 逐块返回生成内容。
  * 消费方式与 services/chat.ts 的 chatStream() 一致。
  *
- * @param id       会话 ID
- * @param model    模型名称
- * @param thinking 是否开启深度思考模式
- * @param signal   AbortSignal 用于取消请求
+ * @param id           会话 ID
+ * @param model        模型名称
+ * @param thinking     是否开启深度思考模式
+ * @param signal       AbortSignal 用于取消请求
+ * @param systemPrompt 系统提示词（可选）
  */
 export async function* streamReply(
   id: string,
   model: string,
   thinking?: boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  systemPrompt?: string,
+  webSearch?: boolean
 ): AsyncGenerator<StreamChunk> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const token = localStorage.getItem(TOKEN_KEY)
@@ -230,6 +223,12 @@ export async function* streamReply(
   const body: Record<string, unknown> = { model }
   if (thinking) {
     body.thinking = { type: 'enabled' }
+  }
+  if (systemPrompt) {
+    body.systemPrompt = systemPrompt
+  }
+  if (webSearch) {
+    body.webSearch = true
   }
 
   const res = await fetch(`${BASE}/conversations/${id}/chat/stream`, {
@@ -274,6 +273,12 @@ export async function* streamReply(
           type: parsed.type,
           aborted: parsed.aborted,
           messageId: parsed.messageId,
+          tokenCount: parsed.tokenCount,
+          tokenLimit: parsed.tokenLimit,
+          toolCallName: parsed.toolCallName,
+          toolCallArgs: parsed.toolCallArgs,
+          searchData: parsed.searchData,
+          memoriesAdded: parsed.memoriesAdded,
         }
         if (parsed.done) return
       } catch (e) {
@@ -289,7 +294,7 @@ export async function* streamReply(
 // ---- 流式对话控制 API ----
 
 /** 停止当前对话的流式生成 */
-export async function stopChat(id: string): Promise<{ success: boolean; message?: string }> {
+export async function stopChat(id: string): Promise<void> {
   return request(`/conversations/${id}/chat/stop`, { method: 'POST' })
 }
 
@@ -303,7 +308,9 @@ export async function* continueChat(
   id: string,
   model: string,
   thinking?: boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  systemPrompt?: string,
+  webSearch?: boolean
 ): AsyncGenerator<StreamChunk> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const token = localStorage.getItem(TOKEN_KEY)
@@ -314,6 +321,12 @@ export async function* continueChat(
   const body: Record<string, unknown> = { model }
   if (thinking) {
     body.thinking = { type: 'enabled' }
+  }
+  if (systemPrompt) {
+    body.systemPrompt = systemPrompt
+  }
+  if (webSearch) {
+    body.webSearch = true
   }
 
   const res = await fetch(`${BASE}/conversations/${id}/chat/continue`, {
@@ -358,6 +371,12 @@ export async function* continueChat(
           type: parsed.type,
           aborted: parsed.aborted,
           messageId: parsed.messageId,
+          tokenCount: parsed.tokenCount,
+          tokenLimit: parsed.tokenLimit,
+          toolCallName: parsed.toolCallName,
+          toolCallArgs: parsed.toolCallArgs,
+          searchData: parsed.searchData,
+          memoriesAdded: parsed.memoriesAdded,
         }
         if (parsed.done) return
       } catch (e) {
@@ -370,14 +389,15 @@ export async function* continueChat(
   yield { content: '', done: true }
 }
 
-// ---- 模型校验 API ----
+// ---- 模型 API ----
 
-/** 模型校验响应 */
-export interface ValidateModelResponse {
-  valid: boolean
-  model: string
-  error?: string
-  suggestion?: string
+/**
+ * 获取后端支持的模型列表
+ *
+ * 无需认证
+ */
+export function getModels(): Promise<ModelItem[]> {
+  return request('/models')
 }
 
 /**
@@ -421,10 +441,11 @@ export function uploadFile(file: File): Promise<UploadFileResponse> {
     if (!res.ok) {
       const body = await res.text()
       let message = `上传失败 (${res.status})`
-      try { message = JSON.parse(body).error || message } catch {}
+      try { message = JSON.parse(body).message || message } catch {}
       throw new Error(message)
     }
-    return res.json()
+    const json = await res.json()
+    return json.data
   })
 }
 
@@ -451,4 +472,83 @@ export function createMemory(data: { category: string; key: string; value: strin
 /** 删除一条记忆 */
 export function deleteMemory(id: string): Promise<void> {
   return request(`/memories/${id}`, { method: 'DELETE' })
+}
+
+// ---- 用户设置 API ----
+
+/** 获取当前用户的系统提示词 */
+export function getUserSettings(): Promise<UserSettingsResponse> {
+  return request('/user/settings')
+}
+
+/** 更新当前用户的系统提示词 */
+export function updateUserSettings(systemPrompt: string): Promise<void> {
+  return request('/user/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ systemPrompt }),
+  })
+}
+
+// ---- 定时任务 API ----
+
+import type { ScheduledTask } from '@/types'
+
+/** 获取定时任务列表 */
+export function fetchTasks(): Promise<ScheduledTask[]> {
+  return request<ScheduledTask[]>('/tasks')
+}
+
+/** 创建定时任务 */
+export function createScheduledTask(data: {
+  title: string
+  prompt: string
+  frequencyType: string
+  time: string
+  dayOfWeek?: number
+  dayOfMonth?: number
+  expiresAt?: string
+  deepThink?: number
+  webSearch?: number
+}): Promise<ScheduledTask> {
+  return request<ScheduledTask>('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+/** 更新定时任务 */
+export function updateScheduledTask(id: string, data: {
+  title?: string
+  prompt?: string
+  frequencyType?: string
+  time?: string
+  dayOfWeek?: number | null
+  dayOfMonth?: number | null
+  enabled?: number
+  expiresAt?: string | null
+  deepThink?: number
+  webSearch?: number
+}): Promise<ScheduledTask> {
+  return request<ScheduledTask>(`/tasks/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
+/** 删除定时任务 */
+export function deleteScheduledTask(id: string): Promise<void> {
+  return request(`/tasks/${id}`, { method: 'DELETE' })
+}
+
+/** 切换定时任务启用状态 */
+export function toggleScheduledTask(id: string, enabled: number): Promise<ScheduledTask> {
+  return request<ScheduledTask>(`/tasks/${id}/toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  })
+}
+
+/** 立即执行定时任务 */
+export function runScheduledTask(id: string): Promise<{ conversationId: string }> {
+  return request<{ conversationId: string }>(`/tasks/${id}/run`, { method: 'POST' })
 }

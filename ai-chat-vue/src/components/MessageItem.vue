@@ -20,6 +20,9 @@ const props = defineProps<{ message: Message }>()
 /** 深度思考面板是否展开 */
 const thinkingExpanded = ref(false)
 
+/** 工具调用面板是否展开 */
+const toolsExpanded = ref(false)
+
 /** 思考过程是否仍在进行中（thinking 有内容但 answer 还未开始） */
 function isThinkingInProgress() {
   return !!props.message.thinking && !props.message.content
@@ -74,7 +77,7 @@ function formatSize(bytes: number) {
             width="16"
             height="16"
           >
-            <polyline points="6 9 12 15 18 9"/>
+            <polyline points="9 6 15 12 9 18"/>
           </svg>
           <span class="message-item__thinking-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -90,6 +93,63 @@ function formatSize(bytes: number) {
         </button>
         <div v-show="thinkingExpanded" class="message-item__thinking-body">
           <MarkdownRenderer :content="message.thinking" />
+        </div>
+      </div>
+
+      <!-- 工具调用面板（仅 assistant 消息，有 toolCalls 时显示） -->
+      <div
+        v-if="message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0"
+        class="message-item__tools"
+      >
+        <button
+          class="message-item__tools-header"
+          @click="toolsExpanded = !toolsExpanded"
+        >
+          <svg
+            class="message-item__tools-chevron"
+            :class="{ 'message-item__tools-chevron--open': toolsExpanded }"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            width="16"
+            height="16"
+          >
+            <polyline points="9 6 15 12 9 18"/>
+          </svg>
+          <span class="message-item__tools-title">
+            🔧 工具调用 ({{ message.toolCalls.length }})
+          </span>
+        </button>
+        <div v-show="toolsExpanded" class="message-item__tools-body">
+          <div v-for="(tc, i) in message.toolCalls" :key="i" class="message-item__tool-item">
+            <div class="message-item__tool-call">
+              <code>{{ tc.name }}({{ tc.args }})</code>
+            </div>
+            <!-- 联网搜索结果：渲染可点击卡片 -->
+            <div v-if="tc.name === 'web_search' && tc.searchResults && tc.searchResults.length > 0" class="message-item__search-results">
+              <div class="message-item__search-meta">
+                共 {{ tc.searchResults.length }} 条结果，耗时 {{ tc.responseTime?.toFixed(2) || '?' }}s
+                <span v-if="tc.answer" class="message-item__search-answer-label"> · AI 摘要已生成</span>
+              </div>
+              <a
+                v-for="(r, j) in tc.searchResults"
+                :key="j"
+                :href="r.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="message-item__search-card"
+              >
+                <span class="message-item__search-title">{{ r.title }}</span>
+                <span class="message-item__search-url">{{ r.url }}</span>
+                <span class="message-item__search-content">{{ r.content }}</span>
+              </a>
+            </div>
+            <!-- 非搜索工具结果 -->
+            <div v-else-if="tc.result !== undefined" class="message-item__tool-result">
+              📋 结果：{{ tc.result }}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -237,7 +297,7 @@ function formatSize(bytes: number) {
     transition: transform 0.2s ease;
 
     &--open {
-      transform: rotate(180deg);
+      transform: rotate(90deg);
     }
   }
 
@@ -290,6 +350,137 @@ function formatSize(bytes: number) {
       color: var(--text-primary);
       font-size: 0.8125rem;
     }
+  }
+
+  /* 工具调用面板 */
+  &__tools {
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 0.625rem;
+    overflow: hidden;
+    background: var(--bg-secondary);
+  }
+
+  &__tools-header {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    transition: background 0.15s;
+
+    &:hover {
+      background: var(--bg-hover);
+    }
+  }
+
+  &__tools-chevron {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+
+    &--open {
+      transform: rotate(90deg);
+    }
+  }
+
+  &__tools-title {
+    flex-shrink: 0;
+  }
+
+  &__tools-body {
+    padding: 0 0.75rem 0.625rem;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-primary);
+  }
+
+  &__tool-item {
+    padding: 0.375rem 0;
+    border-bottom: 1px solid var(--border-primary);
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  &__tool-call {
+    code {
+      background: var(--code-bg);
+      padding: 0.125rem 0.375rem;
+      border-radius: 0.25rem;
+      font-size: 0.8125rem;
+    }
+  }
+
+  &__tool-result {
+    margin-top: 0.25rem;
+    color: var(--text-secondary);
+  }
+
+  /* 搜索结果卡片 */
+  &__search-results {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  &__search-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.125rem;
+  }
+
+  &__search-answer-label {
+    color: var(--accent-primary, #8b5cf6);
+  }
+
+  &__search-card {
+    display: block;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 0.5rem;
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: background 0.15s, border-color 0.15s;
+
+    &:hover {
+      background: var(--bg-hover);
+      border-color: var(--accent-primary, #8b5cf6);
+    }
+  }
+
+  &__search-title {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--accent-primary, #8b5cf6);
+    margin-bottom: 0.125rem;
+    line-height: 1.4;
+  }
+
+  &__search-url {
+    display: block;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__search-content {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
   }
 
   /* 消息文本容器 */

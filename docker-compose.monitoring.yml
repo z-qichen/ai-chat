@@ -1,0 +1,90 @@
+# ============================================================
+# docker-compose.monitoring.yml  —— 监控 & 日志聚合
+#
+# 使用方法:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.monitoring.yml up -d
+#
+# 包含服务:
+#   - Grafana (仪表盘, 端口 3000)
+#   - Loki (日志聚合)
+#   - Promtail (日志采集, 读取容器日志)
+#   - Node Exporter (主机指标)
+#   - Prometheus (指标收集)
+# ============================================================
+
+services:
+  # ==================== Grafana 仪表盘 ====================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ai-chat-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+      - GF_INSTALL_PLUGINS=loki-grafana-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - loki
+      - prometheus
+
+  # ==================== Loki 日志聚合 ====================
+  loki:
+    image: grafana/loki:latest
+    container_name: ai-chat-loki
+    restart: unless-stopped
+    user: "0:0"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+
+  # ==================== Promtail 日志采集 ====================
+  promtail:
+    image: grafana/promtail:latest
+    container_name: ai-chat-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  # ==================== Node Exporter 主机指标 ====================
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: ai-chat-node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  # ==================== Prometheus 指标收集 ====================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ai-chat-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    ports:
+      - "9090:9090"
+
+volumes:
+  grafana-data:
+  loki-data:
+  prometheus-data:

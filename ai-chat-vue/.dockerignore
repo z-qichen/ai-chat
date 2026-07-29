@@ -1,0 +1,9 @@
+# 本目录是构建上下文(ai-chat-vue/)，忽略不需要打入镜像的文件
+
+node_modules/
+dist/
+.env
+.env.local
+*.md
+*.log
+.git/

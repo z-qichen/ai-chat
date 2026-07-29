@@ -28,6 +28,9 @@ import {
   updateConversationSchema,
   paginationSchema,
 } from '../schemas/conversation'
+import { idParamSchema } from '../schemas/common'
+import { validate } from '../utils/validators'
+import { success, fail } from '../utils/response'
 
 export default async function conversationRoutes(app: FastifyInstance) {
   app.addHook('onRequest', authGuard)
@@ -37,15 +40,12 @@ export default async function conversationRoutes(app: FastifyInstance) {
 
     const parsed = paginationSchema.safeParse(request.query)
     if (!parsed.success) {
-      return reply.code(400).send({
-        error: '请求参数校验失败',
-        details: parsed.error.flatten().fieldErrors,
-      })
+      return reply.code(400).send(fail('VALIDATION_ERROR', '请求参数校验失败'))
     }
 
     const { cursor, limit } = parsed.data
     const result = listConversations(userId, cursor, limit)
-    return result
+    return success(result)
   })
 
   app.post('/api/conversations', async (request, reply) => {
@@ -53,10 +53,7 @@ export default async function conversationRoutes(app: FastifyInstance) {
 
     const parsed = createConversationSchema.safeParse(request.body)
     if (!parsed.success) {
-      return reply.code(400).send({
-        error: '请求参数校验失败',
-        details: parsed.error.flatten().fieldErrors,
-      })
+      return reply.code(400).send(fail('VALIDATION_ERROR', '请求参数校验失败'))
     }
 
     const { title, model } = parsed.data as CreateConversationBody
@@ -66,32 +63,28 @@ export default async function conversationRoutes(app: FastifyInstance) {
       model || 'deepseek-chat'
     )
     reply.code(201)
-    return { data: conversation }
+    return success({ data: conversation }, '创建成功')
   })
 
   app.get('/api/conversations/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const { id } = validate(idParamSchema, request.params)
     const userId = (request as any).user.userId
 
     let conversation = getConversationByUser(id, userId)
     if (!conversation) {
-      // 前端可能持有本地生成的会话 ID（未通过后端创建），自动创建
       conversation = createConversation(userId, '新对话', 'deepseek-chat', id)
     }
 
-    return { data: conversation }
+    return success({ data: conversation })
   })
 
   app.patch('/api/conversations/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const { id } = validate(idParamSchema, request.params)
     const userId = (request as any).user.userId
 
     const parsed = updateConversationSchema.safeParse(request.body)
     if (!parsed.success) {
-      return reply.code(400).send({
-        error: '请求参数校验失败',
-        details: parsed.error.flatten().fieldErrors,
-      })
+      return reply.code(400).send(fail('VALIDATION_ERROR', '请求参数校验失败'))
     }
 
     const { title, model } = parsed.data as UpdateConversationBody
@@ -99,32 +92,32 @@ export default async function conversationRoutes(app: FastifyInstance) {
     const conversation = getConversationByUser(id, userId)
     if (!conversation) {
       reply.code(404)
-      return { error: '会话不存在' }
+      return fail('CONVERSATION_NOT_FOUND', '会话不存在')
     }
 
     const updated = updateConversation(id, {
       title: title?.slice(0, 30),
       model,
     })
-    return { data: updated }
+    return success({ data: updated })
   })
 
   app.delete('/api/conversations/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const { id } = validate(idParamSchema, request.params)
     const userId = (request as any).user.userId
 
     const conversation = getConversationByUser(id, userId)
     if (!conversation) {
       reply.code(404)
-      return { error: '会话不存在' }
+      return fail('CONVERSATION_NOT_FOUND', '会话不存在')
     }
 
     const deleted = deleteConversation(id)
     if (!deleted) {
       reply.code(404)
-      return { error: '会话不存在' }
+      return fail('CONVERSATION_NOT_FOUND', '会话不存在')
     }
 
-    return { success: true }
+    return success(null, '删除成功')
   })
 }

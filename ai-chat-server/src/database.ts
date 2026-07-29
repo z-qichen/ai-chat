@@ -91,6 +91,63 @@ try {
   // 列已存在，忽略
 }
 
+// v6 迁移：新增 tool_calls 列支持工具调用记录持久化
+try {
+  db.exec('ALTER TABLE messages ADD COLUMN tool_calls TEXT')
+} catch {
+  // 列已存在，忽略
+}
+
+// v7 迁移：conversations 表新增 from_task_id 列
+try {
+  db.exec('ALTER TABLE conversations ADD COLUMN from_task_id TEXT')
+} catch {
+  // 列已存在，忽略
+}
+
+// v8 迁移：定时任务表
+db.exec(`
+  CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    prompt          TEXT NOT NULL,
+    frequency_type  TEXT NOT NULL CHECK(frequency_type IN ('once','daily','weekly','monthly')),
+    time            TEXT NOT NULL,
+    day_of_week     INTEGER,
+    day_of_month    INTEGER,
+    next_run_at     TEXT,
+    last_run_at     TEXT,
+    enabled         INTEGER NOT NULL DEFAULT 1,
+    result_conversation_id TEXT,
+    expires_at      TEXT,
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_user_id
+    ON scheduled_tasks(user_id);
+
+  CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run
+    ON scheduled_tasks(enabled, next_run_at);
+`)
+
+// v14 迁移：定时任务新增 deep_think 和 web_search 开关
+try {
+  db.exec('ALTER TABLE scheduled_tasks ADD COLUMN deep_think INTEGER DEFAULT 0')
+} catch { /* 列已存在 */ }
+try {
+  db.exec('ALTER TABLE scheduled_tasks ADD COLUMN web_search INTEGER DEFAULT 0')
+} catch { /* 列已存在 */ }
+
+// v5 迁移：用户系统提示词列
+try {
+  db.exec('ALTER TABLE users ADD COLUMN system_prompt TEXT')
+} catch {
+  // 列已存在，忽略
+}
+
 // v4 迁移：用户记忆表，支持跨对话记忆持久化
 db.exec(`
   CREATE TABLE IF NOT EXISTS user_memories (

@@ -11,6 +11,8 @@ import chatRoutes from './chat'
 import modelRoutes from './models'
 import fileRoutes from './files'
 import memoryRoutes from './memory'
+import userRoutes from './user'
+import taskRoutes from './tasks'
 
 export default async function routes(app: FastifyInstance) {
   await app.register(authRoutes)
@@ -20,4 +22,6 @@ export default async function routes(app: FastifyInstance) {
   await app.register(modelRoutes)
   await app.register(fileRoutes)
   await app.register(memoryRoutes)
+  await app.register(userRoutes)
+  await app.register(taskRoutes)
 }

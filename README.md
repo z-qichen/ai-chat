@@ -45,6 +45,45 @@ pnpm dev
 
 前后端同时启动：后端端口 4000，前端端口 3000。浏览器打开 `http://localhost:3000`，注册账号后即可使用。
 
+### Docker 部署
+
+#### 准备
+
+```bash
+cp ai-chat-server/.env.example ai-chat-server/.env   # 编辑 .env 填入 DEEPSEEK_API_KEY
+```
+
+#### 方式一：docker compose（推荐）
+
+```bash
+docker compose up -d                                  # 一键构建并启动前后端
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d   # 生产环境（更严格的资源限制）
+```
+
+#### 方式二：分别构建镜像
+
+```bash
+# 后端
+docker build -t ai-chat-server -f ai-chat-server/Dockerfile .
+docker run -d --name ai-chat-backend --env-file ai-chat-server/.env -p 4000:4000 -v ./data:/app/data ai-chat-server
+
+# 前端
+docker build -t ai-chat-vue -f ai-chat-vue/Dockerfile .
+docker run -d --name ai-chat-frontend -p 80:80 ai-chat-vue
+```
+
+#### 常用命令
+
+```bash
+docker compose down                                   # 停止并移除容器
+docker compose up -d --build                          # 重新构建并启动
+docker compose logs -f                                # 查看所有服务日志
+docker compose logs -f backend                        # 仅查看后端日志
+docker compose restart backend                        # 重启后端服务
+```
+
+启动后浏览器打开 `http://localhost` 即可使用。数据持久化在 `./data` 目录，容器删除重建不丢数据。
+
 ## 功能
 
 - 多轮对话 + SSE 流式输出 + 打字机效果
@@ -171,4 +210,168 @@ pnpm dev
 ```
 
 三个阶段相对独立，建议按 8→9→10 顺序依次推进。
+
+### 11. 多 Agent 场景协作（可视化剧情推演）
+
+> 参照 AutoGen / CrewAI（多 Agent 对话协作）+ AI Town（可视化社交模拟）
+
+在画布上创建角色（Agent），拖拽放置于场景中，Agent 根据角色设定、性格、记忆、技能自主对话，自动推动剧情发展。用户只需给定场景背景和大致故事方向。
+
+#### 11.1 核心概念
+
+| 概念 | 说明 |
+|------|------|
+| **场景（Scene）** | 一个带背景的可视化舞台（教室、办公室、咖啡馆…），承载所有角色 |
+| **角色（SceneAgent）** | 场景中的一个 Agent 节点，拥有独立的人设、记忆和能力 |
+| **个体记忆** | 每个 Agent 独立的对话上下文窗口，仅自己可见 |
+| **共享记忆池** | 多个 Agent 之间共享的消息池，模拟"大家都知道的事" |
+| **剧情方向** | 用户给定的故事大致走向和关键事件，Agent 在约束内自由发挥 |
+| **推演循环** | 回合制调度引擎，每轮选取 2 个或多个 Agent 进行对话交互 |
+
+#### 11.2 新增技术依赖
+
+**前端新增：**
+| 依赖 | 用途 |
+|------|------|
+| `@vue-flow/core` | 画布核心（节点拖拽、连线、缩放平移） |
+| `@vue-flow/background` | 画布背景网格 / 自定义场景底图 |
+| `@vue-flow/minimap` | 画布小地图导航 |
+| `@vue-flow/controls` | 画布缩放控件 |
+
+**后端新增（可选）：**
+| 依赖 | 用途 |
+|------|------|
+| `chromadb` 或 `lancedb` | 长期记忆向量检索（轻量方案可暂用 SQLite + 关键词） |
+
+#### 11.3 数据结构概要
+
+```typescript
+// 角色节点
+interface SceneAgent {
+  id: string
+  name: string
+  role: string              // 角色设定（老师、学生、老板、路人…）
+  personality: string        // 性格描述（开朗、严肃、内向…）
+  skills: string[]           // 技能列表（辩论、编程、书法…）
+  goals: string[]            // 角色目标（当前场景中的个人目的）
+  position: { x: number; y: number }   // 画布坐标
+  avatar?: string            // 头像 URL
+  individualMemory: Message[]           // 个体记忆
+  sharedMemoryPoolIds: string[]         // 关联的共享记忆池
+}
+
+// 共享记忆池
+interface SharedMemoryPool {
+  id: string
+  name: string               // 例如"教室公告栏"、"部门群聊"
+  messages: Message[]        // 池中所有消息
+  memberIds: string[]        // 能访问此池的 Agent ID
+}
+
+// 场景
+interface Scene {
+  id: string
+  name: string
+  background: string         // 背景图 URL 或 CSS 描述
+  agents: SceneAgent[]
+  initialEvent: string       // 初始事件描述（剧情起点）
+  plotDirection: string      // 剧情大致方向
+  targetOutcome?: string     // 目标结局（可选，不填则自由推演）
+  status: 'idle' | 'running' | 'paused' | 'finished'
+}
+```
+
+#### 11.4 架构
+
+```
+┌─ Vue 3 前端 ───────────────────────────────────────────┐
+│  Vue Flow 画布（拖拽 Agent 节点、设置场景背景）          │
+│  + Agent 属性面板（Element Plus Dialog / Drawer）       │
+│  + 对话观察面板（SSE 实时流式气泡）                      │
+│  + 场景管理面板（创建/编辑/启动/暂停场景）                │
+└────────────────────┬────────────────────────────────────┘
+                     │ WebSocket / SSE
+┌─ Fastify 后端 ────┴─────────────────────────────────────┐
+│  SceneController      场景 CRUD + 推演控制               │
+│  SimulationLoop       回合制 Agent 对话调度器              │
+│  AgentMemoryManager   个体记忆 + 共享记忆池管理            │
+│  PlotDriver           剧情方向注入 + 关键事件触发          │
+│  LLMService           调用 DeepSeek 生成 Agent 对话       │
+│  LangGraph Swarm      复用现有 Swarm 集群（编排 → 并行对话） │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### 11.5 推演循环流程
+
+```
+1. 用户创建场景 → 放置 Agent → 设定剧情方向 → 点击"开始推演"
+2. SimulationLoop 启动：
+   a. 读取 initialEvent 作为首轮上下文
+   b. 每轮选择 2 个 Agent（按关系/距离/随机策略）
+   c. 注入角色设定 + 个体记忆 + 共享记忆 + 剧情方向到 Prompt
+   d. LLM 生成对话（结构化输出：发言 Agent + 内容 + 内部状态变更）
+   e. 对话写入各 Agent 个体记忆 + 共享记忆池
+   f. 前端 SSE 推送对话，Agent 节点高亮 + 气泡显示
+3. PlotDriver 检查是否触发关键事件（如"老师点名"）
+4. 重复 b-f 直到达到回合上限或目标结局
+```
+
+#### 11.6 实施计划
+
+- [ ] **11.6.1 画布基础** — 新建 `SceneCanvas.vue`（Vue Flow）
+  - 画布渲染、背景设置（教室/办公室等预设底图）
+  - 自定义 Agent 节点（头像 + 名称 + 状态指示器）
+  - 缩放平移、小地图、控件
+
+- [ ] **11.6.2 Agent 创建与编辑** — 新建 `AgentEditor.vue`
+  - 双击画布创建 Agent / 右键菜单
+  - 属性编辑面板：角色名、人设、性格、技能、目标
+  - 拖拽移动 Agent 节点位置
+  - 关联共享记忆池
+
+- [ ] **11.6.3 场景管理** — 新建 `SceneManager.vue`
+  - 场景列表（CRUD）
+  - 场景配置：名称、背景图、初始事件、剧情方向
+  - 启动 / 暂停 / 停止推演
+
+- [ ] **11.6.4 共享记忆池管理** — 新建 `MemoryPoolManager.vue`
+  - 创建/编辑/删除共享记忆池
+  - 将 Agent 加入/移出记忆池
+  - 查看池内消息历史
+
+- [ ] **11.6.5 后端场景服务** — 数据库迁移 + `routes/scene.ts`
+  - `scenes` 表、`scene_agents` 表、`shared_memory_pools` 表、`shared_memory_messages` 表
+  - 场景 CRUD API（`POST/GET/PATCH/DELETE /api/scenes`）
+  - Agent CRUD API（`POST/GET/PATCH/DELETE /api/scenes/:id/agents`）
+
+- [ ] **11.6.6 推演引擎** — 新建 `services/simulation.ts`
+  - `SimulationLoop` 回合制调度器
+  - `AgentMemoryManager` 个体记忆 + 共享记忆管理
+  - `PlotDriver` 剧情方向注入 + 关键事件触发器
+  - `DialogueGenerator` LLM 调用生成 Agent 对话
+
+- [ ] **11.6.7 实时对话推送** — WebSocket 路由 + 前端消费
+  - WS endpoint: `/ws/scene/:sceneId` 推送对话事件
+  - 事件类型：`agent_speak`（发言）、`agent_action`（行为）、`plot_event`（剧情事件）
+  - 前端 Pinia Store 消费事件流，Agent 节点高亮 + 气泡动画
+
+- [ ] **11.6.8 对话观察面板** — 新建 `DialoguePanel.vue`
+  - 侧边 Panel 展示实时对话流（类似聊天窗口）
+  - 发言者头像 + 角色名 + 气泡内容
+  - 暂停时回看历史对话
+  - 过滤单个 Agent 的对话视图
+
+#### 依赖关系
+
+```
+11.6.1（画布）→ 11.6.2（Agent编辑）→ 11.6.3（场景管理）
+                                              ↓
+11.6.4（记忆池）                         11.6.5（后端服务）
+                                              ↓
+                                        11.6.6（推演引擎）
+                                              ↓
+                                   11.6.7（实时推送）
+                                              ↓
+                                   11.6.8（对话面板）
+```
 

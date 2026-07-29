@@ -2,7 +2,7 @@
   ChatArea.vue —— 聊天主区域布局组件
 
   职责：
-    - 顶部栏：侧边栏折叠时显示展开按钮 + 模型选择器
+    - 顶部栏：模型选择器
     - 中间：消息列表（MessageList），无消息时垂直居中，有消息时上移
     - 底部：消息输入框（ChatInput），固定不随列表滚动
 
@@ -11,15 +11,11 @@
     - 通过 `hasMessages` 切换 empty / has-content 两种布局模式
 -->
 <script setup lang="ts">
-import { computed, inject, type Ref } from 'vue'
+import { computed } from 'vue'
 import { useConversationStore } from '@/stores/conversation'
 import MessageList from './MessageList.vue'
 import ChatInput from './ChatInput.vue'
 import ModelSelector from './ModelSelector.vue'
-
-/** 从父布局 ChatPage 注入侧边栏状态 */
-const sidebarVisible = inject<Ref<boolean>>('sidebarVisible')!
-const toggleSidebar = inject<() => void>('toggleSidebar')!
 
 const chatStore = useConversationStore()
 
@@ -33,13 +29,6 @@ const hasMessages = computed(() => {
   <div class="chat-area">
     <!-- 顶部导航栏 -->
     <div class="chat-area__top">
-      <!-- 侧边栏折叠时才显示展开按钮 -->
-      <button v-if="!sidebarVisible" class="chat-area__toggle-btn" @click="toggleSidebar">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          <line x1="9" y1="3" x2="9" y2="21"/>
-        </svg>
-      </button>
       <ModelSelector />
     </div>
 
@@ -70,28 +59,6 @@ const hasMessages = computed(() => {
   flex-shrink: 0;
   padding: 1rem 1rem 0.75rem;
   background: var(--bg-primary);
-}
-
-/* 侧边栏展开按钮（仅在折叠时显示） */
-.chat-area__toggle-btn {
-  position: absolute;
-  left: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 0.375rem;
-  color: var(--text-placeholder);
-  cursor: pointer;
-  transition: all 0.15s;
-
-  &:hover {
-    background-color: var(--bg-hover);
-    color: var(--text-secondary);
-  }
 }
 
 /* 内容主体 */

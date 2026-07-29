@@ -191,7 +191,7 @@ export const useConversationStore = defineStore('conversation', () => {
             currentId.value = latest.id;
             return;
         }
-        const id = `conv_${Date.now()}`;
+        const id = crypto.randomUUID();
         const now = Date.now();
         sessions.value.unshift({ id, title: '新对话', updatedAt: now, messageCount: 0 });
         currentId.value = id;

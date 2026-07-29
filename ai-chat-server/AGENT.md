@@ -6,7 +6,12 @@
 
 - 所有文件使用 ES Module (`"type": "module"`)
 - 路径别名 `@/` → `src/`（已配置 tsconfig paths）
-- 公共类型集中在 `src/types/index.ts`
+- 类型定义统一放在 `src/types/`，按职责拆分：
+  - `domain.ts` — 核心领域模型（Message、Conversation、User 等）
+  - `api.ts` — API 请求/响应 DTO（请求体、响应体、StreamChunk 等）
+  - `services.ts` — 服务层内部类型（ToolDefinition、ChatMessage 等）
+  - `index.ts` — 统一 re-export
+- **严禁在 services/ 或 routes/ 中定义 interface/type**，所有类型必须归属到 `src/types/` 对应文件中
 - 路由层只做参数校验和响应，业务逻辑下沉到 `src/services/`
 - 插件使用 `fastify-plugin` 包装，通过 `app.register()` 加载
 - 数据库使用 better-sqlite3 同步 API，适合单进程开发场景
@@ -45,7 +50,11 @@ src/
 ├── index.ts                  # 入口：创建 Fastify 实例，注册插件与路由
 ├── config.ts                 # 环境变量配置
 ├── database.ts               # SQLite 连接 + 表结构初始化
-├── types/index.ts            # 全局类型定义
+├── types/
+│   ├── index.ts              # 统一导出入口
+│   ├── domain.ts             # 核心领域模型
+│   ├── api.ts                # API 请求/响应 DTO
+│   └── services.ts           # 服务层内部类型
 ├── plugins/                  # Fastify 插件（cors、jwt、rateLimit）
 ├── middlewares/auth.ts       # JWT 认证守卫
 ├── routes/                   # 路由层（auth、conversations、messages、chat、files、models）

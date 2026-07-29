@@ -27,6 +27,18 @@ data/
 .DS_Store
 Thumbs.db
 
+# 备份
+backups/
+
+# Caddy 运行时数据
+caddy-data/
+caddy-config/
+
+# 监控数据
+grafana-data/
+loki-data/
+prometheus-data/
+
 # 临时文件
 *.tmp
 *.bak

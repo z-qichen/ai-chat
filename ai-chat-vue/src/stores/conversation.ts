@@ -117,6 +117,18 @@ async function resolveMessageFiles(messages: Message[]) {
   }
 }
 
+/** 将后端消息 JSON 映射为前端 Message 类型（字段名对齐） */
+function mapBackendMessage(raw: any): Message {
+  return {
+    id: raw.id,
+    role: raw.role,
+    content: raw.content,
+    timestamp: raw.timestamp,
+    thinking: raw.reasoningContent || undefined,
+    toolCalls: raw.toolCalls || undefined,
+  }
+}
+
 export const useConversationStore = defineStore('conversation', () => {
   // ============================================================
   // State
@@ -232,7 +244,7 @@ export const useConversationStore = defineStore('conversation', () => {
       return
     }
 
-    const id = `conv_${Date.now()}`
+    const id = crypto.randomUUID()
     const now = Date.now()
     sessions.value.unshift({ id, title: '新对话', updatedAt: now, messageCount: 0 })
     currentId.value = id
@@ -357,9 +369,10 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       const { getMessages } = await import('@/services/api')
       const res = await getMessages(id, undefined, PAGE_SIZE)
-      await resolveMessageFiles(res.messages)
+      const messages = res.messages.map(mapBackendMessage)
+      await resolveMessageFiles(messages)
       const existingMessages = messagesCache.value[id]?.messages ?? []
-      const mergedMessages = [...res.messages]
+      const mergedMessages = [...messages]
       for (const message of existingMessages) {
         // 仅按 ID 去重：前后端 ID 已通过回填保持一致，避免误删内容相同的合法消息
         const duplicated = mergedMessages.some((item) => item.id === message.id)
@@ -399,13 +412,14 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       const { getMessages } = await import('@/services/api')
       const res = await getMessages(id, cache.cursor, PAGE_SIZE)
-      await resolveMessageFiles(res.messages)
+      const messages = res.messages.map(mapBackendMessage)
+      await resolveMessageFiles(messages)
       // 后端返回 DESC（新→旧），反转为正序（旧→新）后插入头部
-      cache.messages.unshift(...res.messages.reverse())
+      cache.messages.unshift(...messages.reverse())
       cache.hasMore = res.hasMore
       // 更新游标为新加载的最老消息时间戳（后端返回 DESC，末尾是最老的）
-      if (res.messages.length > 0) {
-        cache.cursor = String(res.messages[res.messages.length - 1].timestamp)
+      if (messages.length > 0) {
+        cache.cursor = String(messages[messages.length - 1].timestamp)
       } else {
         cache.hasMore = false
       }
@@ -488,6 +502,44 @@ export const useConversationStore = defineStore('conversation', () => {
     touchSession(sessionId)
   }
 
+  /** 向指定会话的指定消息追加工具调用记录 */
+  function addToolCall(
+    sessionId: string,
+    messageId: string,
+    name: string,
+    args: string,
+    result?: string,
+    searchData?: { answer?: string; results: Array<{ title: string; url: string; content: string; score: number }>; responseTime: number }
+  ) {
+    const cache = ensureCacheForSession(sessionId)
+    const message = cache.messages.find((item) => item.id === messageId)
+    if (!message) return
+    if (!message.toolCalls) message.toolCalls = []
+    if (result !== undefined || searchData !== undefined) {
+      const existing = message.toolCalls.find(tc => tc.name === name && tc.result === undefined && tc.searchResults === undefined)
+      if (existing) {
+        if (result !== undefined) existing.result = result
+        if (searchData) {
+          existing.searchResults = searchData.results
+          existing.answer = searchData.answer
+          existing.responseTime = searchData.responseTime
+        }
+        return
+      }
+      message.toolCalls.push({
+        name,
+        args,
+        result,
+        searchResults: searchData?.results,
+        answer: searchData?.answer,
+        responseTime: searchData?.responseTime,
+      })
+    } else {
+      message.toolCalls.push({ name, args })
+    }
+    touchSession(sessionId)
+  }
+
   /** 确保当前会话的缓存条目存在（无当前会话时自动创建） */
   function ensureCache(): CacheEntry {
     const id = ensureCurrentSessionId()
@@ -563,5 +615,6 @@ export const useConversationStore = defineStore('conversation', () => {
     updateMessageId,
     appendToLastMessage,
     appendToMessage,
+    addToolCall,
   }
 })

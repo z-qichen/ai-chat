@@ -51,7 +51,7 @@ onUnmounted(() => {
 
 /** 传给 Sidebar 的会话列表（仅含 id + title，不含消息） */
 const sidebarSessions = computed(() =>
-  store.sessions.map((s) => ({ id: s.id, title: s.title }))
+  store.sessions.map((s) => ({ id: s.id, title: s.title, fromTaskId: s.fromTaskId }))
 )
 
 /** 切换侧边栏展开/折叠状态 */
@@ -122,6 +122,13 @@ watch(
 
     <!-- 右侧内容区：根据子路由动态切换 -->
     <div class="chat-page__main">
+      <!-- 侧边栏折叠时显示展开按钮（所有子路由页面共用） -->
+      <button v-if="!isSidebarVisible" class="chat-page__expand-btn" @click="onToggleSidebar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="9" y1="3" x2="9" y2="21"/>
+        </svg>
+      </button>
       <router-view />
     </div>
   </div>
@@ -153,6 +160,32 @@ watch(
   &__main {
     flex: 1;
     min-width: 0;
+    position: relative;
+  }
+
+  /* 侧边栏展开按钮（全局，侧边栏折叠时浮在内容区左上角） */
+  &__expand-btn {
+    position: absolute;
+    z-index: 10;
+    top: 1rem;
+    left: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.375rem;
+    color: var(--text-placeholder);
+    cursor: pointer;
+    transition: all 0.15s;
+    background: transparent;
+    border: none;
+    padding: 0;
+
+    &:hover {
+      background-color: var(--bg-hover);
+      color: var(--text-secondary);
+    }
   }
 
   /* 移动端抽屉遮罩层：桌面端隐藏 */

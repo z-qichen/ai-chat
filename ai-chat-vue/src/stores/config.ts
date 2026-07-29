@@ -16,7 +16,7 @@ import type { AppConfig } from '@/types'
 
 /** 默认配置（可通过设置页面修改） */
 const DEFAULT_CONFIG: AppConfig = {
-  model: 'deepseek-chat',
+  model: 'deepseek-v4-pro',
   systemPrompt: '你是一个有用的AI助手。',
 }
 

@@ -101,3 +101,29 @@ export function findUserByUsername(username: string): User | undefined {
     createdAt: row.created_at,
   }
 }
+
+/**
+ * 获取用户系统提示词
+ *
+ * @param userId - 用户 ID
+ * @returns 系统提示词文本，未设置则返回 null
+ */
+export function getUserSystemPrompt(userId: string): string | null {
+  const row = db.prepare(
+    'SELECT system_prompt FROM users WHERE id = ?'
+  ).get(userId) as any
+
+  return row?.system_prompt ?? null
+}
+
+/**
+ * 更新用户系统提示词
+ *
+ * @param userId - 用户 ID
+ * @param systemPrompt - 系统提示词文本
+ */
+export function updateUserSystemPrompt(userId: string, systemPrompt: string): void {
+  db.prepare(
+    'UPDATE users SET system_prompt = ? WHERE id = ?'
+  ).run(systemPrompt, userId)
+}

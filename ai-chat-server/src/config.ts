@@ -23,11 +23,15 @@ export const config = {
     baseUrl: process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com/v1',
   },
 
+  tavily: {
+    apiKey: process.env.TAVILY_API_KEY ?? '',
+  },
+
   upload: {
     dir: process.env.UPLOAD_DIR ?? './data/files',
     maxSize: parseInt(process.env.MAX_FILE_SIZE ?? '10485760', 10),
   },
 
   /** 支持的模型列表 */
-  models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-pro', 'deepseek-v4-flash'] as readonly string[],
+  models: ['deepseek-v4-pro', 'deepseek-v4-flash'] as readonly string[],
 } as const

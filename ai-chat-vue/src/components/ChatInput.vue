@@ -18,7 +18,7 @@
     - 有消息态（hasMessages=true）：紧凑输入框，固定在底部
 -->
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { streamReply, continueChat, stopChat, addMessage, uploadFile } from '@/services/api'
 import { useConfigStore } from '@/stores/config'
 import { useConversationStore } from '@/stores/conversation'
@@ -38,6 +38,7 @@ function genMsgId(): string {
 // ---- 输入状态 ----
 const inputText = ref('')                          // 输入框文本
 const deepThinking = ref(false)                    // 深度思考模式开关
+const webSearch = ref(false)                       // 联网搜索开关
 const isGenerating = ref(false)                    // 是否正在生成 AI 回复
 const isAborted = ref(false)                       // 生成被中断，可继续
 const abortController = ref<AbortController | null>(null) // 当前请求的 AbortController
@@ -177,7 +178,7 @@ async function send() {
 
   if (!userMessage && files.length === 0) return
 
-  const { model } = configStore.config
+  const { model, systemPrompt } = configStore.config
 
   if (!chatStore.currentId) {
     chatStore.createSession()
@@ -222,9 +223,11 @@ async function send() {
 
   const stream = streamReply(
     conversationId,
-    deepThinking.value ? 'deepseek-reasoner' : model,
+    deepThinking.value ? 'deepseek-v4-pro' : model,
     deepThinking.value,
-    ctrl.signal
+    ctrl.signal,
+    systemPrompt,
+    webSearch.value
   )
 
   await consumeStream(stream, deepThinking.value, conversationId, assistantMessageId)
@@ -240,7 +243,7 @@ async function continueGeneration() {
   if (isGenerating.value) return
   if (!chatStore.currentId) return
 
-  const { model } = configStore.config
+  const { model, systemPrompt } = configStore.config
   const conversationId = chatStore.currentId
   const lastAssistantMessage = [...chatStore.currentMessages()].reverse().find((msg) => msg.role === 'assistant')
   if (!lastAssistantMessage) return
@@ -253,9 +256,11 @@ async function continueGeneration() {
 
   const stream = continueChat(
     conversationId,
-    deepThinking.value ? 'deepseek-reasoner' : model,
+    deepThinking.value ? 'deepseek-v4-pro' : model,
     deepThinking.value,
-    ctrl.signal
+    ctrl.signal,
+    systemPrompt,
+    webSearch.value
   )
 
   await consumeStream(stream, deepThinking.value, conversationId, lastAssistantMessage.id)
@@ -276,6 +281,17 @@ async function consumeStream(
 ) {
   try {
     for await (const chunk of stream) {
+      if (chunk.type === 'meta') {
+        continue
+      }
+      if (chunk.type === 'tool_call') {
+        chatStore.addToolCall(conversationId, assistantMessageId, chunk.toolCallName || '?', chunk.toolCallArgs || '{}')
+        continue
+      }
+      if (chunk.type === 'tool_result') {
+        chatStore.addToolCall(conversationId, assistantMessageId, chunk.toolCallName || '?', '{}', chunk.content || undefined, chunk.searchData)
+        continue
+      }
       if (chunk.done) {
         if (chunk.aborted) {
           isAborted.value = true
@@ -326,6 +342,11 @@ function toggleDeepThinking() {
   deepThinking.value = !deepThinking.value
 }
 
+/** 切换联网搜索 */
+function toggleWebSearch() {
+  webSearch.value = !webSearch.value
+}
+
 /** 格式化文件大小 */
 function formatSize(bytes: number) {
   if (bytes == null || isNaN(bytes) || bytes < 0) return '--'
@@ -351,7 +372,12 @@ function formatSize(bytes: number) {
     <div class="chat-input" :class="{ 'chat-input--compact': hasMessages }">
       <!-- 操作按钮行：联网搜索 / 深度思考 / 上传 -->
       <div class="chat-input__actions">
-        <button class="chat-input__action-btn" title="联网搜索">
+        <button
+          class="chat-input__action-btn"
+          :class="{ 'chat-input__action-btn--active': webSearch }"
+          title="联网搜索"
+          @click="toggleWebSearch"
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
             <circle cx="11" cy="11" r="8"/>
             <path d="M21 21l-4.3-4.3"/>

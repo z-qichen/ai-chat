@@ -48,11 +48,11 @@ npx vue-tsc --noEmit  # 类型检查
 - [x] **跨标签记忆** — 用户档案管理页，分组卡片展示，支持手动增删，置信度可视化
 
 ### 待完成
-- [ ] `pages/SettingsPage.vue` — API 配置页面 (目前为占位)
+- [x] `pages/SettingsPage.vue` — API 配置页面 (系统提示词编辑 + 变量替换 + 后端同步)
 - [ ] `pages/TaskPage.vue` — 定时任务页面 (目前为占位)
 - [ ] `pages/PluginsPage.vue` — 插件页面 (目前为占位)
 - [ ] `utils/stream.ts` — SSE 流式工具抽离 (当前逻辑在 services/chat.ts 内)
-- [ ] "停止生成" 按钮 (AbortController 已在 service 支持，UI 未接入)
+- [x] "停止生成" 按钮 (AbortController 前端 + 后端 `/chat/stop` API 完整实现)
 - [ ] "联网搜索" 功能 (按钮已绘制，未接线)
   - [ ] 前端 Tool Calling 流式解析与分发
     - 后端 `deepseek.ts chatStream` 已实现流式 tool_calls 增量解析（Map 按 index 累加 arguments + content/tool_calls 混排边界处理），流结束时会 yield 完整 `toolCalls` 数组

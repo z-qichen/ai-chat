@@ -38,7 +38,7 @@ export const useChatStore = defineStore('chat', () => {
     /** 确保存在一个当前会话：如果当前会话不存在或为空，则创建一个新的 */
     function ensureConversation() {
         if (!currentId.value || !currentConversation()) {
-            const id = `conv_${Date.now()}`;
+            const id = crypto.randomUUID();
             conversations.value.unshift({
                 id,
                 title: '新对话',
@@ -55,7 +55,7 @@ export const useChatStore = defineStore('chat', () => {
     function createNewChat() {
         const current = currentConversation();
         if (!current || current.messages.length > 0) {
-            const id = `conv_${Date.now()}`;
+            const id = crypto.randomUUID();
             conversations.value.unshift({
                 id,
                 title: '新对话',

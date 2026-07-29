@@ -9,17 +9,25 @@ import Fastify from 'fastify'
 import corsPlugin from './plugins/cors'
 import jwtPlugin from './plugins/jwt'
 import rateLimitPlugin from './plugins/rateLimit'
+import errorHandlerPlugin from './plugins/errorHandler'
+import metricsPlugin from './plugins/metrics'
 import multipartPlugin from '@fastify/multipart'
 import routes from './routes/index'
+import { registerBuiltinAgents } from './agents'
+import { startScheduler } from './scheduler/index'
 import { config } from './config'
 
+const isDev = process.env.NODE_ENV !== 'production'
+
 const app = Fastify({
-  logger: {
-    transport: {
-      target: 'pino-pretty',
-      options: { colorize: true },
-    },
-  },
+  logger: isDev
+    ? {
+        transport: {
+          target: 'pino-pretty',
+          options: { colorize: true },
+        },
+      }
+    : true,
 })
 
 // 注册插件
@@ -27,6 +35,11 @@ await app.register(corsPlugin)
 await app.register(jwtPlugin)
 await app.register(rateLimitPlugin)
 await app.register(multipartPlugin, { limits: { fileSize: config.upload.maxSize } })
+await app.register(errorHandlerPlugin)
+await app.register(metricsPlugin)
+
+// 注册内置 Agent
+registerBuiltinAgents()
 
 // 注册路由
 await app.register(routes)
@@ -38,6 +51,9 @@ app.get('/api/health', async () => ({ status: 'ok', timestamp: Date.now() }))
 try {
   await app.listen({ port: config.port, host: config.host })
   app.log.info(`Server ready → http://${config.host}:${config.port}`)
+
+  // 启动定时任务调度器
+  startScheduler()
 } catch (err) {
   app.log.error(err)
   process.exit(1)

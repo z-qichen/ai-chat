@@ -1,21 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useConfigStore } from '@/stores/config'
-import { validateModel } from '@/services/api'
+import { getModels, validateModel } from '@/services/api'
+import type { ModelItem } from '@/types'
 
 const configStore = useConfigStore()
 
-/** 可用模型列表（展示用，实际校验由后端完成） */
-const availableModels = [
-  { value: 'deepseek-chat', label: 'DeepSeek Chat' },
-  { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-  { value: 'claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
-  { value: 'claude-3-opus', label: 'Claude 3 Opus' },
-]
+/** 从后端获取的可用模型列表 */
+const availableModels = ref<ModelItem[]>([])
 
 /** 下拉菜单是否展开 */
 const visible = ref(false)
@@ -24,9 +17,27 @@ const visible = ref(false)
 const switching = ref(false)
 
 /** 当前选中模型的显示名称 */
-const currentLabel = ref(
-  availableModels.find((m) => m.value === configStore.config.model)?.label ?? configStore.config.model
-)
+const currentLabel = ref(configStore.config.model)
+
+/** 根据 model value 解析显示标签 */
+function resolveLabel(value: string): string {
+  return availableModels.value.find((m) => m.value === value)?.label ?? value
+}
+
+/** 加载模型列表 */
+async function loadModels() {
+  try {
+    const models = await getModels()
+    availableModels.value = models
+    // 同步当前显示标签
+    currentLabel.value = resolveLabel(configStore.config.model)
+  } catch {
+    // 后端未启动时使用兜底
+    currentLabel.value = configStore.config.model
+  }
+}
+
+onMounted(loadModels)
 
 /** 展开/收起下拉菜单 */
 function toggle() {
@@ -34,35 +45,33 @@ function toggle() {
 }
 
 /** 切换模型 */
-async function select(modelValue: string, label: string) {
+async function select(modelValue: string) {
   if (switching.value) return
   visible.value = false
+
+  const label = resolveLabel(modelValue)
 
   switching.value = true
   try {
     const res = await validateModel(modelValue)
     if (res.valid) {
       configStore.updateConfig({ model: res.model })
-      currentLabel.value = label
-      ElMessage.success(`已切换至 ${label}`)
+      currentLabel.value = resolveLabel(res.model)
+      ElMessage.success(`已切换至 ${currentLabel.value}`)
     } else {
-      // 模型不合法，检查是否有近似建议
       if (res.suggestion) {
         try {
           await ElMessageBox.confirm(
             res.error || `模型 "${modelValue}" 不存在`,
             '模型校验失败',
             {
-              confirmButtonText: `使用 "${res.suggestion}"`,
+              confirmButtonText: `使用 "${resolveLabel(res.suggestion)}"`,
               cancelButtonText: '取消',
               type: 'warning',
             }
           )
-          // 用户确认使用建议模型，递归调用校验
-          const suggestedLabel =
-            availableModels.find((m) => m.value === res.suggestion)?.label ?? res.suggestion
           switching.value = false
-          select(res.suggestion!, suggestedLabel)
+          select(res.suggestion!)
           return
         } catch {
           // 用户取消
@@ -116,7 +125,7 @@ function onBlur() {
           :key="m.value"
           class="model-selector__option"
           :class="{ 'model-selector__option--active': m.value === configStore.config.model }"
-          @click="select(m.value, m.label)"
+          @click="select(m.value)"
         >
           <span>{{ m.label }}</span>
           <span class="model-selector__option-id">{{ m.value }}</span>

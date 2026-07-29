@@ -24,6 +24,11 @@ const router = createRouter({
           component: () => import('@/pages/TaskPage.vue'),
         },
         {
+          path: 'agents',
+          name: 'agents',
+          component: () => import('@/pages/AgentPage.vue'),
+        },
+        {
           path: 'plugins',
           name: 'plugins',
           component: () => import('@/pages/PluginsPage.vue'),

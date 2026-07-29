@@ -39,10 +39,11 @@ export function listMessages(
 
 export function createMessage(msg: Omit<Message, 'id'>): Message {
   const id = randomUUID()
+  const toolCallsJson = msg.toolCalls?.length ? JSON.stringify(msg.toolCalls) : null
   db.prepare(`
-    INSERT INTO messages (id, conversation_id, role, content, timestamp, files, reasoning_content, partial)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, msg.conversationId, msg.role, msg.content, msg.timestamp, msg.files ?? null, msg.reasoningContent ?? null, msg.partial ? 1 : 0)
+    INSERT INTO messages (id, conversation_id, role, content, timestamp, files, reasoning_content, partial, tool_calls)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, msg.conversationId, msg.role, msg.content, msg.timestamp, msg.files ?? null, msg.reasoningContent ?? null, msg.partial ? 1 : 0, toolCallsJson)
   return { id, ...msg }
 }
 
@@ -56,6 +57,15 @@ export function listAllMessages(conversationId: string): Message[] {
 }
 
 function mapRow(row: any): Message {
+  let toolCalls: Message['toolCalls'] = null
+  if (row.tool_calls) {
+    try {
+      const parsed = JSON.parse(row.tool_calls)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        toolCalls = parsed
+      }
+    } catch { /* JSON 解析失败忽略 */ }
+  }
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -64,13 +74,14 @@ function mapRow(row: any): Message {
     timestamp: row.timestamp,
     files: row.files,
     reasoningContent: row.reasoning_content,
+    toolCalls,
     partial: row.partial ? true : false,
   }
 }
 
 export function updateMessage(
   id: string,
-  updates: { content?: string; partial?: boolean; reasoningContent?: string | null }
+  updates: { content?: string; partial?: boolean; reasoningContent?: string | null; toolCalls?: Array<any> | null }
 ): void {
   const sets: string[] = []
   const values: any[] = []
@@ -86,6 +97,10 @@ export function updateMessage(
   if (updates.reasoningContent !== undefined) {
     sets.push('reasoning_content = ?')
     values.push(updates.reasoningContent)
+  }
+  if (updates.toolCalls !== undefined) {
+    sets.push('tool_calls = ?')
+    values.push(updates.toolCalls?.length ? JSON.stringify(updates.toolCalls) : null)
   }
 
   if (sets.length > 0) {

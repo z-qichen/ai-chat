@@ -46,6 +46,7 @@ const emit = defineEmits<{
 interface Session {
   id: string
   title: string
+  fromTaskId?: string | null
 }
 
 // ---- Props ----
@@ -327,7 +328,15 @@ onUnmounted(() => {
           >
             <!-- 会话图标 -->
             <span class="session-card__icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <!-- 闹钟图标：定时任务创建的对话 -->
+              <svg v-if="item.fromTaskId" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="13" r="8"/>
+                <path d="M12 9v4l2.5 2.5"/>
+                <path d="M4.5 5.5l-2-2"/>
+                <path d="M19.5 5.5l2-2"/>
+              </svg>
+              <!-- 对话图标：普通对话 -->
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
             </span>
@@ -389,6 +398,17 @@ onUnmounted(() => {
         <polyline points="12 6 12 12 16 14"/>
       </svg>
       <span>定时任务</span>
+    </button>
+    <!-- 多Agent协作按钮 -->
+    <button class="sidebar-header__new-chat" @click="router.push('/agents')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="8" r="2"/>
+        <circle cx="16" cy="8" r="2"/>
+        <circle cx="12" cy="14" r="2"/>
+        <line x1="9" y1="9.5" x2="11" y2="12.5"/>
+        <line x1="15" y1="9.5" x2="13" y2="12.5"/>
+      </svg>
+      <span>多Agent协作</span>
     </button>
     <!-- 插件按钮 -->
     <button class="sidebar-header__new-chat" @click="router.push('/plugins')">

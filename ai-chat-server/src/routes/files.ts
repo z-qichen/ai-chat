@@ -9,6 +9,9 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { authGuard } from '../middlewares/auth'
 import { saveFile, getFileRecord } from '../services/file'
 import { config } from '../config'
+import { idParamSchema } from '../schemas/common'
+import { validate } from '../utils/validators'
+import { success, fail } from '../utils/response'
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/png',
@@ -50,48 +53,48 @@ export default async function fileRoutes(app: FastifyInstance) {
     const data = await request.file()
     if (!data) {
       reply.code(400)
-      return { error: '未提供文件' }
+      return fail('FILE_MISSING', '未提供文件')
     }
 
     if (!isAllowedFile(data.mimetype, data.filename)) {
       reply.code(400)
-      return { error: `不支持的文件类型: ${data.mimetype}` }
+      return fail('FILE_TYPE_INVALID', `不支持的文件类型: ${data.mimetype}`)
     }
 
     const buffer = await data.toBuffer()
 
     if (buffer.length > config.upload.maxSize) {
       reply.code(413)
-      return { error: `文件大小超过限制 (${config.upload.maxSize} 字节)` }
+      return fail('FILE_TOO_LARGE', `文件大小超过限制 (${config.upload.maxSize} 字节)`)
     }
 
     const file = saveFile(buffer, data.filename, data.mimetype, userId)
 
     reply.code(201)
-    return {
+    return success({
       fileId: file.id,
       originalName: file.originalName,
       mimeType: file.mimeType,
       size: file.size,
-    }
+    }, '上传成功')
   })
 
   app.get('/api/files/:id', async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string }
+    const { id } = validate(idParamSchema, request.params)
     const userId = (request as any).user.userId
 
     const file = getFileRecord(id)
     if (!file || file.userId !== userId) {
       reply.code(404)
-      return { error: '文件不存在' }
+      return fail('FILE_NOT_FOUND', '文件不存在')
     }
 
-    return {
+    return success({
       fileId: file.id,
       originalName: file.originalName,
       mimeType: file.mimeType,
       size: file.size,
       createdAt: file.createdAt,
-    }
+    })
   })
 }

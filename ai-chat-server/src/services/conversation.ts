@@ -53,23 +53,26 @@ export function listConversations(
  * @param userId - 用户 ID
  * @param title  - 会话标题，默认为 "新对话"
  * @param model  - 使用的模型，默认 "deepseek-chat"
+ * @param id     - 可选的会话 ID
+ * @param fromTaskId - 可选的定时任务 ID，标记此会话由定时任务创建
  * @returns 创建的会话
  */
 export function createConversation(
   userId: string,
   title = '新对话',
   model = 'deepseek-chat',
-  id?: string
+  id?: string,
+  fromTaskId?: string
 ): Conversation {
   const convId = id ?? randomUUID()
   const now = Date.now()
 
   db.prepare(`
-    INSERT INTO conversations (id, user_id, title, model, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(convId, userId, title, model, now, now)
+    INSERT INTO conversations (id, user_id, title, model, from_task_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(convId, userId, title, model, fromTaskId ?? null, now, now)
 
-  return { id: convId, userId, title, model, createdAt: now, updatedAt: now }
+  return { id: convId, userId, title, model, fromTaskId: fromTaskId ?? null, createdAt: now, updatedAt: now }
 }
 
 /**
@@ -143,6 +146,7 @@ function mapRow(row: any): Conversation {
     userId: row.user_id,
     title: row.title,
     model: row.model,
+    fromTaskId: row.from_task_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
